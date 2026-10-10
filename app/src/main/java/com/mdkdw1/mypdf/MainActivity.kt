@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
-import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import com.github.barteksc.pdfviewer.PDFView
@@ -20,7 +19,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var emptyText: TextView
     private lateinit var btnAdd: Button
     private lateinit var btnBack: Button
-    private lateinit var rootLayout: FrameLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,7 +29,6 @@ class MainActivity : AppCompatActivity() {
         emptyText = findViewById(R.id.emptyText)
         btnAdd = findViewById(R.id.btnAdd)
         btnBack = findViewById(R.id.btnBack)
-        rootLayout = findViewById(R.id.rootLayout)
 
         btnAdd.setOnClickListener { pickPdf() }
         btnBack.setOnClickListener {
@@ -39,7 +36,6 @@ class MainActivity : AppCompatActivity() {
             showList()
         }
 
-        // 인텐트로 PDF 열기 요청이 오면 바로 처리
         if (intent?.action == Intent.ACTION_VIEW) {
             intent.data?.let { openUri(it) }
         } else {
@@ -54,7 +50,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── 앱 내부 저장소의 PDF 목록 표시 ──
     private fun showList() {
         listView.visibility = View.VISIBLE
         emptyText.visibility = View.GONE
@@ -64,7 +59,7 @@ class MainActivity : AppCompatActivity() {
         if (files.isEmpty()) {
             listView.visibility = View.GONE
             emptyText.visibility = View.VISIBLE
-            emptyText.text = "저장된 PDF가 없습니다.\n[PDF 추가] 버튼을 눌러주세요."
+            emptyText.text = "저장된 PDF가 없습니다.\n[+ PDF 추가] 버튼을 눌러주세요."
             return
         }
 
@@ -96,7 +91,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    // ── PDF 추가 (SAF 파일 선택기) ──
     private fun pickPdf() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -141,7 +135,6 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) { null }
     }
 
-    // ── 인텐트로 온 URI 처리 ──
     private fun openUri(uri: Uri) {
         try {
             val dir = File(filesDir, "pdfs").apply { mkdirs() }
@@ -156,7 +149,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── PDF 열기 ──
     private fun openPdf(file: File) {
         if (!file.exists()) {
             Toast.makeText(this, "파일 없음: ${file.name}", Toast.LENGTH_LONG).show()
@@ -168,7 +160,6 @@ class MainActivity : AppCompatActivity() {
         btnBack.visibility = View.VISIBLE
         pdfView.visibility = View.VISIBLE
 
-        // ⭐️ 흰 화면 방지: 레이아웃 완료 후 로드
         pdfView.post {
             try {
                 pdfView.fromFile(file)
@@ -178,10 +169,11 @@ class MainActivity : AppCompatActivity() {
                     .enableAntialiasing(true)
                     .spacing(10)
                     .defaultPage(0)
-                    .onLoad {
+                    .onLoad { pages ->
+                        // ⭐️ 여기서 it 대신 pages 사용
                         Toast.makeText(
                             this,
-                            "${file.name}\n${pageCount} 페이지",
+                            "${file.name}\n${pages} 페이지",
                             Toast.LENGTH_SHORT
                         ).show()
                     }
