@@ -1,10 +1,6 @@
 package com.mdkdw1.mypdf
 
-import android.annotation.SuppressLint
-import android.content.Intent
 import android.graphics.ColorMatrix
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
@@ -16,7 +12,6 @@ import com.github.barteksc.pdfviewer.PDFView
 import com.github.barteksc.pdfviewer.listener.OnPageChangeListener
 import com.github.barteksc.pdfviewer.listener.OnLoadCompleteListener
 import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle
-import com.shockwave.pdfium.PdfDocument
 import java.io.File
 
 class ReaderActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompleteListener {
@@ -63,7 +58,6 @@ class ReaderActivity : AppCompatActivity(), OnPageChangeListener, OnLoadComplete
 
         prefs = ReadingPrefs(this)
 
-        // 뷰 바인딩
         pdfView = findViewById(R.id.pdfView)
         toolbar = findViewById(R.id.toolbar)
         bottomBar = findViewById(R.id.bottomBar)
@@ -78,19 +72,15 @@ class ReaderActivity : AppCompatActivity(), OnPageChangeListener, OnLoadComplete
         btnPrev = findViewById(R.id.btnPrev)
         btnNext = findViewById(R.id.btnNext)
 
-        // 화면 항상 켜짐
         if (prefs.keepScreenOn) {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
 
-        // 즐겨찾기 상태
         updateFavButton()
 
-        // 페이지 이동
         btnPrev.setOnClickListener { jump(currentPage - 1) }
         btnNext.setOnClickListener { jump(currentPage + 1) }
 
-        // 슬라이더
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
                 if (fromUser) jump(p)
@@ -99,13 +89,11 @@ class ReaderActivity : AppCompatActivity(), OnPageChangeListener, OnLoadComplete
             override fun onStopTrackingTouch(sb: SeekBar?) {}
         })
 
-        // 다크 모드
         btnDark.setOnClickListener {
             prefs.darkMode = !prefs.darkMode
             applyDarkMode()
         }
 
-        // 이북 모드 (가로/세로 전환)
         btnEbook.setOnClickListener {
             isHorizontal = !isHorizontal
             Toast.makeText(
@@ -116,13 +104,17 @@ class ReaderActivity : AppCompatActivity(), OnPageChangeListener, OnLoadComplete
             loadPdf()
         }
 
-        // 목차
-        btnToc.setOnClickListener { showToc() }
+        // 목차: mhiew 라이브러리 API 다름 → 안내만
+        btnToc.setOnClickListener {
+            Toast.makeText(
+                this,
+                "이 라이브러리 버전은 목차를 지원하지 않습니다.\n슬라이더를 사용하세요.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
 
-        // 검색
         btnSearch.setOnClickListener { showSearchDialog() }
 
-        // 즐겨찾기
         btnFav.setOnClickListener {
             prefs.toggleFavorite(pdfFile.name)
             updateFavButton()
@@ -133,13 +125,9 @@ class ReaderActivity : AppCompatActivity(), OnPageChangeListener, OnLoadComplete
             ).show()
         }
 
-        // 닫기
         btnClose.setOnClickListener { finish() }
-
-        // 화면 탭 → 툴바 토글
         pdfView.setOnClickListener { toggleToolbar() }
 
-        // 초기 로드
         loadPdf()
     }
 
@@ -174,19 +162,14 @@ class ReaderActivity : AppCompatActivity(), OnPageChangeListener, OnLoadComplete
     }
 
     private fun applyDarkMode() {
+        // 배경색만 변경 (setColorMatrix 미지원)
         if (prefs.darkMode) {
-            val cm = ColorMatrix(floatArrayOf(
-                -1f, 0f, 0f, 0f, 255f,
-                0f, -1f, 0f, 0f, 255f,
-                0f, 0f, -1f, 0f, 255f,
-                0f, 0f, 0f, 1f, 0f
-            ))
-            pdfView.setColorMatrix(cm)
             window.decorView.setBackgroundColor(0xFF000000.toInt())
+            pdfView.setBackgroundColor(0xFF000000.toInt())
             btnDark.text = "☀"
         } else {
-            pdfView.setColorMatrix(ColorMatrix())
             window.decorView.setBackgroundColor(0xFFEEEEEE.toInt())
+            pdfView.setBackgroundColor(0xFFEEEEEE.toInt())
             btnDark.text = "🌙"
         }
     }
@@ -213,52 +196,27 @@ class ReaderActivity : AppCompatActivity(), OnPageChangeListener, OnLoadComplete
         }
     }
 
-    // 목차 표시
-    private fun showToc() {
-        try {
-            val doc: PdfDocument = pdfView.document ?: run {
-                Toast.makeText(this, "목차 정보 없음", Toast.LENGTH_SHORT).show()
-                return
-            }
-            val toc = doc.bookmarks ?: emptyList()
-            if (toc.isEmpty()) {
-                Toast.makeText(this, "이 PDF에는 목차가 없습니다", Toast.LENGTH_SHORT).show()
-                return
-            }
-            val titles = toc.map { it.title }.toTypedArray()
-            AlertDialog.Builder(this)
-                .setTitle("목차")
-                .setItems(titles) { _, which ->
-                    val pageIdx = toc[which].pageIdx.toInt()
-                    jump(pageIdx)
-                }
-                .setNegativeButton("닫기", null)
-                .show()
-        } catch (e: Exception) {
-            Toast.makeText(this, "목차 오류: ${e.message}", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    // 텍스트 검색 (PDFium은 텍스트 검색 미지원이라 파일명 등 간이 검색)
     private fun showSearchDialog() {
-        val input = EditText(this).apply { hint = "검색어 입력" }
+        val input = EditText(this).apply {
+            hint = "페이지 번호"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        }
         AlertDialog.Builder(this)
-            .setTitle("페이지 번호로 이동")
-            .setMessage("텍스트 검색은 지원 예정입니다.\n페이지 번호를 입력하세요 (1~$pageCount)")
+            .setTitle("페이지 이동")
+            .setMessage("1 ~ $pageCount 사이 숫자 입력")
             .setView(input)
             .setPositiveButton("이동") { _, _ ->
                 val n = input.text.toString().toIntOrNull()
                 if (n != null && n in 1..pageCount) {
                     jump(n - 1)
                 } else {
-                    Toast.makeText(this, "1~$pageCount 사이 숫자 입력", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "1~$pageCount 사이 숫자", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("취소", null)
             .show()
     }
 
-    // 볼륨키 페이지 넘김
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (prefs.volumeKeyPage) {
             when (keyCode) {
