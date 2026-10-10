@@ -25,6 +25,9 @@ android {
 }
 
 dependencies {
+    // PDFium 클래스 (classes.jar)
+    implementation(files("libs/pdfium-classes.jar"))
+
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
 }
