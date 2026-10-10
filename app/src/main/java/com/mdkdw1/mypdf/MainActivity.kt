@@ -15,8 +15,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        pdfView = PDFView(this)
-        setContentView(pdfView)
+        setContentView(R.layout.activity_main)
+        pdfView = findViewById(R.id.pdfView)
 
         when (intent?.action) {
             Intent.ACTION_VIEW -> intent.data?.let { openUri(it) } ?: loadDefault()
