@@ -47,6 +47,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
@@ -61,12 +62,10 @@ android {
 }
 
 dependencies {
-    // Core
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
 
-    // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2025.01.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
@@ -74,9 +73,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.5")
 
-    // ⭐ AndroidX PDF (공식, API 35+)
+    // AndroidX PDF (AGP 8.9.1+ 필요)
     implementation("androidx.pdf:pdf-viewer:1.0.0-alpha13")
 
-    // Storage
     implementation("androidx.documentfile:documentfile:1.0.1")
 }
