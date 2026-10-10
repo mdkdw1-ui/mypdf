@@ -1,11 +1,17 @@
 package com.mdkdw1.mypdf
 
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.provider.Settings
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import java.io.File
 
 class FilePickerActivity : AppCompatActivity() {
@@ -16,30 +22,25 @@ class FilePickerActivity : AppCompatActivity() {
     private lateinit var btnUp: Button
     private lateinit var btnClose: Button
 
-    private var currentDir: File = Environment.getExternalStorageDirectory()
+    private var currentDir: File = File("/storage/emulated/0")
 
-    // 🚫 시스템/숨김 폴더 이름 (정확히 이 이름이면 제외)
     private val blockedNames = setOf(
         "Android", "android", "data", "obb",
         "MIUI", "miui", "tencent", "Tencent",
         "System", "system", "cache", "Cache",
         "tmp", "temp", "Temp", "lost+found", "LOST.DIR",
-        "Document", "Documents", "Music", "Podcasts",
-        "Ringtones", "Alarms", "Notifications",
-        "Movies", "Pictures", "DCIM",
         ".thumbnails", "log", "logs", "Log", "backups"
     )
 
     private fun isBlocked(name: String): Boolean {
-        if (name.startsWith(".")) return true          // 숨김
-        if (name.startsWith("com.")) return true        // 앱 데이터
+        if (name.startsWith(".")) return true
+        if (name.startsWith("com.")) return true
         if (name.startsWith("org.")) return true
         if (name.startsWith("me.")) return true
         if (blockedNames.contains(name)) return true
         return false
     }
 
-    // 현재 폴더 바로 아래 PDF 있는지
     private fun hasPdfDirect(dir: File): Boolean {
         val files = dir.listFiles() ?: return false
         return files.any { it.isFile && it.extension.lowercase() == "pdf" }
@@ -59,8 +60,9 @@ class FilePickerActivity : AppCompatActivity() {
 
         btnUp.setOnClickListener {
             val parent = currentDir.parentFile
-            val root = "/storage/emulated/0"
-            if (parent != null && parent.canRead() && currentDir.absolutePath != root) {
+            val roots = listOf("/storage/emulated/0", "/storage")
+            if (parent != null && parent.canRead() &&
+                !roots.contains(currentDir.absolutePath)) {
                 currentDir = parent
                 loadDir()
             } else {
@@ -68,14 +70,78 @@ class FilePickerActivity : AppCompatActivity() {
             }
         }
 
-        val start = when {
-            File("/storage/emulated/0").canRead() -> File("/storage/emulated/0")
-            Environment.getExternalStorageDirectory().canRead() ->
-                Environment.getExternalStorageDirectory()
-            else -> filesDir
+        // ── 권한 처리 ──
+        if (!checkStoragePermission()) {
+            requestStoragePermission()
+        } else {
+            loadDir()
         }
-        currentDir = start
-        loadDir()
+    }
+
+    private fun checkStoragePermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun requestStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+: 모든 파일 액세스 권한 요청
+            try {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = Uri.parse("package:$packageName")
+                startActivityForResult(intent, 2001)
+            } catch (e: Exception) {
+                val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                startActivityForResult(intent, 2001)
+            }
+        } else {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE),
+                2002
+            )
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == 2001) {
+            // Settings에서 돌아옴 → 재확인
+            if (checkStoragePermission()) {
+                loadDir()
+            } else {
+                Toast.makeText(
+                    this,
+                    "저장소 권한이 필요합니다.\n설정 → 앱 → 권한 → 모든 파일 액세스",
+                    Toast.LENGTH_LONG
+                ).show()
+                // 권한 없어도 앱 내부 저장소는 보여줌
+                currentDir = filesDir
+                loadDir()
+            }
+        } else if (requestCode == 2002) {
+            if (checkStoragePermission()) loadDir()
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 2002 && grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            loadDir()
+        } else {
+            Toast.makeText(this, "권한 거부됨", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun loadDir() {
@@ -83,24 +149,26 @@ class FilePickerActivity : AppCompatActivity() {
 
         val allFiles = currentDir.listFiles()?.sortedBy { it.name.lowercase() } ?: emptyList()
 
-        // 1) 현재 폴더의 PDF
+        // 권한 없어 listFiles() null이면 안내
+        if (allFiles.isEmpty() && !currentDir.canRead()) {
+            listView.visibility = View.GONE
+            tvEmpty.visibility = View.VISIBLE
+            tvEmpty.text = "폴더를 읽을 수 없습니다.\n모든 파일 액세스 권한을 허용해주세요."
+            return
+        }
+
         val pdfFiles = allFiles.filter { f ->
             f.isFile && f.extension.lowercase() == "pdf"
         }
-
-        // 2) 하위 폴더 (시스템/숨김 제외)
         val subFolders = allFiles.filter { f ->
             f.isDirectory && !isBlocked(f.name)
         }
 
         val display = mutableListOf<Pair<File, String>>()
-
-        // 폴더 먼저 (PDF 있으면 🔴)
         subFolders.forEach { f ->
             val prefix = if (hasPdfDirect(f)) "📁🔴" else "📁"
             display.add(f to "$prefix ${f.name}")
         }
-        // PDF 파일
         pdfFiles.forEach { f ->
             display.add(f to "📄 ${f.name}")
         }
@@ -116,8 +184,7 @@ class FilePickerActivity : AppCompatActivity() {
         tvEmpty.visibility = View.GONE
 
         listView.adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_list_item_1,
+            this, android.R.layout.simple_list_item_1,
             display.map { it.second }
         )
 
@@ -138,8 +205,9 @@ class FilePickerActivity : AppCompatActivity() {
     override fun onBackPressed() {
         @Suppress("DEPRECATION")
         val parent = currentDir.parentFile
-        val root = "/storage/emulated/0"
-        if (parent != null && parent.canRead() && currentDir.absolutePath != root) {
+        val roots = listOf("/storage/emulated/0", "/storage")
+        if (parent != null && parent.canRead() &&
+            !roots.contains(currentDir.absolutePath)) {
             currentDir = parent
             loadDir()
         } else {
