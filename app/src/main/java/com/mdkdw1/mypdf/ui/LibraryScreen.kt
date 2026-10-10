@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
@@ -18,7 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.mdkdw1.mypdf.CrashLogger
 import com.mdkdw1.mypdf.FilePickerActivity
+import com.mdkdw1.mypdf.LogActivity
 import com.mdkdw1.mypdf.ReadingPrefs
 import java.io.File
 import java.io.FileOutputStream
@@ -44,8 +47,10 @@ fun LibraryScreen(onOpenReader: (String) -> Unit) {
                     src.inputStream().use { input ->
                         FileOutputStream(dst).use { out -> input.copyTo(out) }
                     }
+                    CrashLogger.log(context, "LIB", "PDF 추가: ${src.name}")
                     refresh++
                 } catch (e: Exception) {
+                    CrashLogger.e(context, "LIB", "저장 실패", e)
                     android.widget.Toast.makeText(
                         context, "저장 실패: ${e.message}",
                         android.widget.Toast.LENGTH_LONG
@@ -78,9 +83,22 @@ fun LibraryScreen(onOpenReader: (String) -> Unit) {
                         Icon(Icons.Filled.Sort, contentDescription = "정렬")
                     }
                     IconButton(onClick = {
-                        launcher.launch(Intent(context, FilePickerActivity::class.java))
+                        try {
+                            launcher.launch(Intent(context, FilePickerActivity::class.java))
+                        } catch (e: Exception) {
+                            CrashLogger.e(context, "LIB", "탐색기 열기 실패", e)
+                            android.widget.Toast.makeText(
+                                context, "탐색기 오류: ${e.message}",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
                     }) {
                         Icon(Icons.Filled.Add, contentDescription = "PDF 추가")
+                    }
+                    IconButton(onClick = {
+                        context.startActivity(Intent(context, LogActivity::class.java))
+                    }) {
+                        Icon(Icons.Filled.BugReport, contentDescription = "로그")
                     }
                 }
             )

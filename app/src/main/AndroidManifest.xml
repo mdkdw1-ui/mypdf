@@ -8,6 +8,7 @@
         tools:ignore="ScopedStorage" />
 
     <application
+        android:name=".MyApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -33,9 +34,23 @@
                 <data android:scheme="content" android:mimeType="application/pdf" />
             </intent-filter>
         </activity>
+
         <activity
             android:name=".FilePickerActivity"
             android:exported="false"
-            android:label="PDF 선택" />
+            android:label="PDF 선택"
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".LogActivity"
+            android:exported="false"
+            android:label="로그"
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".CrashActivity"
+            android:exported="false"
+            android:label="크래시"
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
     </application>
 </manifest>
