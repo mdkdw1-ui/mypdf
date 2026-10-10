@@ -1,7 +1,7 @@
 package com.mdkdw1.mypdf.ui
 
 import android.graphics.Color as AndroidColor
-import androidx.compose.foundation.background
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -12,8 +12,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.FileProvider
+import androidx.pdf.PdfDocument
 import androidx.pdf.view.PdfView
 import com.mdkdw1.mypdf.ReadingPrefs
 import java.io.File
@@ -26,108 +27,105 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
     val file = remember { File(path) }
 
     var darkMode by remember { mutableStateOf(prefs.darkMode) }
-    var showToolbar by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
 
-    val pdfView = remember {
-        PdfView(context).apply {
-            setBackgroundColor(if (darkMode) AndroidColor.BLACK else AndroidColor.WHITE)
-        }
-    }
-
-    // 파일 로드
-    LaunchedEffect(file.absolutePath) {
+    // FileProvider URI
+    val uri: Uri = remember(file.absolutePath) {
         try {
-            val uri = androidx.core.content.FileProvider.getUriForFile(
+            FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.fileprovider",
                 file
             )
-            pdfView.setDocumentUri(uri)
-            prefs.saveLastOpened(file.name)
         } catch (e: Exception) {
-            // FileProvider 미설정 시 직접 시도
-            pdfView.setDocumentUri(android.net.Uri.fromFile(file))
+            Uri.fromFile(file)
         }
     }
 
-    // 다크 모드 반영
-    LaunchedEffect(darkMode) {
-        pdfView.setBackgroundColor(if (darkMode) AndroidColor.BLACK else AndroidColor.WHITE)
+    // ⭐ 문서 로드 (백그라운드에서 PdfDocument 생성)
+    val pdfDocument by produceState<PdfDocument?>(initialValue = null, uri) {
+        value = try {
+            PdfDocument.load(context, uri)
+        } catch (e: Exception) {
+            loadError = e.message
+            null
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // ── 에러 표시 ──
+        if (loadError != null) {
+            Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("PDF를 열 수 없습니다", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(8.dp))
+                Text(loadError ?: "", style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = onBack) { Text("뒤로") }
+            }
+            return@Box
+        }
+
+        // ── 로딩 중 ──
+        if (pdfDocument == null) {
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            return@Box
+        }
+
         // ── PDF 뷰어 ──
         AndroidView(
-            factory = { pdfView },
+            factory = { ctx ->
+                PdfView(ctx).apply {
+                    setBackgroundColor(
+                        if (darkMode) AndroidColor.BLACK else AndroidColor.WHITE
+                    )
+                    setDocument(pdfDocument!!)
+                }
+            },
+            update = { view ->
+                view.setBackgroundColor(
+                    if (darkMode) AndroidColor.BLACK else AndroidColor.WHITE
+                )
+            },
             modifier = Modifier.fillMaxSize()
         )
 
         // ── 상단 툴바 ──
-        if (showToolbar) {
-            TopAppBar(
-                title = { Text(file.name, maxLines = 1) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        darkMode = !darkMode
-                        prefs.darkMode = darkMode
-                    }) {
-                        Icon(
-                            if (darkMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
-                            "다크 모드"
-                        )
-                    }
-                    IconButton(onClick = {
-                        val ok = prefs.toggleFavorite(file.name)
-                        // TODO: 스낵바
-                    }) {
-                        Icon(
-                            if (prefs.isFavorite(file.name)) Icons.Filled.Star else Icons.Filled.StarBorder,
-                            "즐겨찾기"
-                        )
-                    }
-                    IconButton(onClick = {
-                        // TODO: 목차
-                    }) {
-                        Icon(Icons.Filled.Menu, "목차")
-                    }
-                    IconButton(onClick = {
-                        // TODO: 검색
-                    }) {
-                        Icon(Icons.Filled.Search, "검색")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (darkMode)
-                        Color(0xCC000000) else Color(0xCCFFFFFF),
-                    titleContentColor = if (darkMode) Color.White else Color.Black,
-                    actionIconContentColor = if (darkMode) Color.White else Color.Black,
-                    navigationIconContentColor = if (darkMode) Color.White else Color.Black,
-                ),
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
-        }
-
-        // ── 툴바 토글용 하단 탭 영역 (미니멀) ──
-        Box(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .fillMaxSize()
-        ) {
-            // 화면 탭하면 툴바 토글
-            // AndroidView가 터치를 다 먹어서 Compose에서 직접 감지 어려움
-            // 우회: 상단/하단 엣지 탭 영역
-            Row(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(Color.Transparent)
-            ) {}
-        }
+        TopAppBar(
+            title = { Text(file.name, maxLines = 1) },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로")
+                }
+            },
+            actions = {
+                IconButton(onClick = {
+                    darkMode = !darkMode
+                    prefs.darkMode = darkMode
+                }) {
+                    Icon(
+                        if (darkMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+                        "다크 모드"
+                    )
+                }
+                IconButton(onClick = {
+                    prefs.toggleFavorite(file.name)
+                }) {
+                    Icon(
+                        if (prefs.isFavorite(file.name)) Icons.Filled.Star else Icons.Filled.StarBorder,
+                        "즐겨찾기"
+                    )
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = if (darkMode) Color(0xCC000000) else Color(0xCCFFFFFF),
+                titleContentColor = if (darkMode) Color.White else Color.Black,
+                actionIconContentColor = if (darkMode) Color.White else Color.Black,
+                navigationIconContentColor = if (darkMode) Color.White else Color.Black,
+            ),
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
     }
 }
