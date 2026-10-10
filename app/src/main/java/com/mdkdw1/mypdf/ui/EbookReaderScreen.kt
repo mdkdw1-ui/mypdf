@@ -1,6 +1,7 @@
 package com.mdkdw1.mypdf.ui
 
 import android.graphics.Color as AndroidColor
+import android.view.LayoutInflater
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -15,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.github.barteksc.pdfviewer.PDFView
 import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle
+import com.mdkdw1.mypdf.R
 import com.mdkdw1.mypdf.ReadingPrefs
 import java.io.File
 
@@ -34,31 +36,30 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
     var pdfViewRef by remember { mutableStateOf<PDFView?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // ── PDF 뷰어 ──
+        // ⭐ XML inflate 방식
         AndroidView(
             factory = { ctx ->
-                PDFView(ctx).apply {
-                    setBackgroundColor(
-                        if (darkMode) AndroidColor.BLACK else AndroidColor.WHITE
-                    )
-                    fromFile(file)
-                        .enableSwipe(true)
-                        .swipeHorizontal(isHorizontal)
-                        .enableDoubletap(true)
-                        .enableAntialiasing(true)
-                        .spacing(if (isHorizontal) 0 else 10)
-                        .defaultPage(prefs.getPage(file.name))
-                        .scrollHandle(DefaultScrollHandle(ctx))
-                        .onLoad { pages ->
-                            pageCount = pages
-                        }
-                        .onPageChange { page, _ ->
-                            currentPage = page
-                            prefs.savePage(file.name, page)
-                        }
-                        .load()
-                    pdfViewRef = this
-                }
+                val view = LayoutInflater.from(ctx)
+                    .inflate(R.layout.view_pdf, null, false) as PDFView
+                view.setBackgroundColor(
+                    if (darkMode) AndroidColor.BLACK else AndroidColor.WHITE
+                )
+                view.fromFile(file)
+                    .enableSwipe(true)
+                    .swipeHorizontal(isHorizontal)
+                    .enableDoubletap(true)
+                    .enableAntialiasing(true)
+                    .spacing(if (isHorizontal) 0 else 10)
+                    .defaultPage(prefs.getPage(file.name))
+                    .scrollHandle(DefaultScrollHandle(ctx))
+                    .onLoad { pages -> pageCount = pages }
+                    .onPageChange { page, _ ->
+                        currentPage = page
+                        prefs.savePage(file.name, page)
+                    }
+                    .load()
+                pdfViewRef = view
+                view
             },
             update = { view ->
                 view.setBackgroundColor(
@@ -131,7 +132,7 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
             )
         }
 
-        // ── 하단 페이지 네비게이션 ──
+        // ── 하단 네비게이션 ──
         if (toolbarVisible && pageCount > 0) {
             Card(
                 modifier = Modifier
@@ -170,7 +171,7 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
             }
         }
 
-        // ── 툴바 복귀용 (숨김 상태일 때) ──
+        // ── 툴바 다시 표시 버튼 ──
         if (!toolbarVisible) {
             Box(
                 modifier = Modifier
