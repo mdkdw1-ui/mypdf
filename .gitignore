@@ -9,4 +9,12 @@ captures/
 .cxx/
 *.jks
 *.keystore
+*.p12
+*.pem
 keystore.base64
+*.zip
+*.aar
+AndroidPdfViewer-master/
+pdfviewer.zip
+icon.jpeg
+icon.png
