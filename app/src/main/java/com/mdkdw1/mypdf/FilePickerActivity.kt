@@ -18,19 +18,31 @@ class FilePickerActivity : AppCompatActivity() {
 
     private var currentDir: File = Environment.getExternalStorageDirectory()
 
-    // 폴더에 PDF가 있는지 재귀적으로 검사 (깊이 제한)
-    private fun hasPdfDeep(dir: File, depth: Int = 0): Boolean {
-        if (depth > 4) return false
-        val files = dir.listFiles() ?: return false
-        for (f in files) {
-            if (f.isFile && f.extension.lowercase() == "pdf") return true
-        }
-        for (f in files) {
-            if (f.isDirectory && !f.name.startsWith(".")) {
-                if (hasPdfDeep(f, depth + 1)) return true
-            }
-        }
+    // 🚫 시스템/숨김 폴더 이름 (정확히 이 이름이면 제외)
+    private val blockedNames = setOf(
+        "Android", "android", "data", "obb",
+        "MIUI", "miui", "tencent", "Tencent",
+        "System", "system", "cache", "Cache",
+        "tmp", "temp", "Temp", "lost+found", "LOST.DIR",
+        "Document", "Documents", "Music", "Podcasts",
+        "Ringtones", "Alarms", "Notifications",
+        "Movies", "Pictures", "DCIM",
+        ".thumbnails", "log", "logs", "Log", "backups"
+    )
+
+    private fun isBlocked(name: String): Boolean {
+        if (name.startsWith(".")) return true          // 숨김
+        if (name.startsWith("com.")) return true        // 앱 데이터
+        if (name.startsWith("org.")) return true
+        if (name.startsWith("me.")) return true
+        if (blockedNames.contains(name)) return true
         return false
+    }
+
+    // 현재 폴더 바로 아래 PDF 있는지
+    private fun hasPdfDirect(dir: File): Boolean {
+        val files = dir.listFiles() ?: return false
+        return files.any { it.isFile && it.extension.lowercase() == "pdf" }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,13 +55,12 @@ class FilePickerActivity : AppCompatActivity() {
         btnUp = findViewById(R.id.btnUp)
         btnClose = findViewById(R.id.btnClose)
 
-        // ← 뒤로 (앱 닫기)
         btnClose.setOnClickListener { finish() }
 
-        // ↑ 상위 폴더
         btnUp.setOnClickListener {
             val parent = currentDir.parentFile
-            if (parent != null && parent.canRead()) {
+            val root = "/storage/emulated/0"
+            if (parent != null && parent.canRead() && currentDir.absolutePath != root) {
                 currentDir = parent
                 loadDir()
             } else {
@@ -72,27 +83,32 @@ class FilePickerActivity : AppCompatActivity() {
 
         val allFiles = currentDir.listFiles()?.sortedBy { it.name.lowercase() } ?: emptyList()
 
-        // 표시할 항목:
-        // 1) 이 폴더의 PDF 파일들
-        // 2) 하위 폴더 중 PDF가 있는 것만
+        // 1) 현재 폴더의 PDF
         val pdfFiles = allFiles.filter { f ->
             f.isFile && f.extension.lowercase() == "pdf"
         }
-        val pdfFolders = allFiles.filter { f ->
-            f.isDirectory &&
-            !f.name.startsWith(".") &&
-            f.canRead() &&
-            hasPdfDeep(f)
+
+        // 2) 하위 폴더 (시스템/숨김 제외)
+        val subFolders = allFiles.filter { f ->
+            f.isDirectory && !isBlocked(f.name)
         }
 
         val display = mutableListOf<Pair<File, String>>()
-        pdfFolders.forEach { display.add(it to "📁 ${it.name}") }
-        pdfFiles.forEach { display.add(it to "📄 ${it.name}") }
+
+        // 폴더 먼저 (PDF 있으면 🔴)
+        subFolders.forEach { f ->
+            val prefix = if (hasPdfDirect(f)) "📁🔴" else "📁"
+            display.add(f to "$prefix ${f.name}")
+        }
+        // PDF 파일
+        pdfFiles.forEach { f ->
+            display.add(f to "📄 ${f.name}")
+        }
 
         if (display.isEmpty()) {
             listView.visibility = View.GONE
             tvEmpty.visibility = View.VISIBLE
-            tvEmpty.text = "이 폴더에 PDF가 없습니다\n다른 폴더로 이동해보세요"
+            tvEmpty.text = "이 폴더에 PDF나 하위 폴더가 없습니다"
             return
         }
 
