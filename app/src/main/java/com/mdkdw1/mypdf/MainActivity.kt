@@ -1,5 +1,6 @@
 package com.mdkdw1.mypdf
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -12,24 +13,29 @@ import java.io.FileOutputStream
 class MainActivity : AppCompatActivity() {
 
     private lateinit var pdfView: PDFView
+    private val PICK_PDF_FILE = 2
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         pdfView = findViewById(R.id.pdfView)
 
-        when (intent?.action) {
-            Intent.ACTION_VIEW -> intent.data?.let { openUri(it) } ?: loadDefault()
-            else -> loadDefault()
-        }
+        // 앱 실행 시 파일 선택기 즉시 띄우기
+        openFilePicker()
     }
 
-    private fun loadDefault() {
-        val file = File(filesDir, "sample.pdf")
-        if (file.exists()) {
-            showPdf(file)
-        } else {
-            Toast.makeText(this, "PDF 파일을 열어주세요", Toast.LENGTH_LONG).show()
+    private fun openFilePicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/pdf"
+        }
+        startActivityForResult(intent, PICK_PDF_FILE)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == PICK_PDF_FILE && resultCode == Activity.RESULT_OK) {
+            data?.data?.let { uri -> openUri(uri) }
         }
     }
 
@@ -50,8 +56,8 @@ class MainActivity : AppCompatActivity() {
             .enableSwipe(true)
             .swipeHorizontal(false)
             .enableDoubletap(true)
-            .enableAntialiasing(true)
-            .spacing(10)
+            .enableAntialiasing(true) // 부드러운 렌더링
+            .spacing(10)              // 페이지 간격 (부드러운 스크롤 효과)
             .defaultPage(0)
             .load()
     }

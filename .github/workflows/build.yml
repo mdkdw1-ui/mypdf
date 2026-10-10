@@ -43,6 +43,13 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
+      # ⭐️ Artifact 업로드 (새로 추가된 부분)
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyPDF-v${{ steps.ver.outputs.name }}
+          path: app/build/outputs/apk/release/*.apk
+
       - name: Commit version bump
         run: |
           git config user.name "github-actions[bot]"
