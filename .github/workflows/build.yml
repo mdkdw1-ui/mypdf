@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, androidx-pdf-ebook ]
   workflow_dispatch:
 
 jobs:
@@ -43,11 +43,10 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      # ⭐️ Artifact 업로드 (새로 추가된 부분)
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MyPDF-v${{ steps.ver.outputs.name }}
+          name: MyPDF-v${{ steps.ver.outputs.name }}-${{ github.ref_name }}
           path: app/build/outputs/apk/release/*.apk
 
       - name: Commit version bump
@@ -59,6 +58,7 @@ jobs:
           git push
 
       - name: Create Release
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.name }}
