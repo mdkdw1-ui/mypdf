@@ -33,15 +33,9 @@
                 <data android:scheme="content" android:mimeType="application/pdf" />
             </intent-filter>
         </activity>
-
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
+        <activity
+            android:name=".FilePickerActivity"
             android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
+            android:label="PDF 선택" />
     </application>
 </manifest>
