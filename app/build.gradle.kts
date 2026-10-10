@@ -54,5 +54,6 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation(project(":pdfviewer"))
+    // ✅ AndroidX 기반 최신 포크 (Maven Central)
+    implementation("com.github.mhiew:android-pdf-viewer:3.2.0-beta.3")
 }

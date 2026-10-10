@@ -1,6 +1,5 @@
 package com.mdkdw1.mypdf
 
-import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -13,7 +12,7 @@ import java.io.FileOutputStream
 
 class MainActivity : AppCompatActivity() {
 
-    private val PICK_PDF_FILE = 2
+    private val REQ_PICK_PDF = 1001
     private lateinit var pdfView: PDFView
     private lateinit var listView: ListView
     private lateinit var emptyText: TextView
@@ -30,7 +29,10 @@ class MainActivity : AppCompatActivity() {
         btnAdd = findViewById(R.id.btnAdd)
         btnBack = findViewById(R.id.btnBack)
 
-        btnAdd.setOnClickListener { pickPdf() }
+        btnAdd.setOnClickListener {
+            // 앱 내부 탐색기 실행
+            startActivityForResult(Intent(this, FilePickerActivity::class.java), REQ_PICK_PDF)
+        }
         btnBack.setOnClickListener {
             pdfView.visibility = View.GONE
             showList()
@@ -91,48 +93,30 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun pickPdf() {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "application/pdf"
-        }
-        startActivityForResult(intent, PICK_PDF_FILE)
-    }
-
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == PICK_PDF_FILE && resultCode == Activity.RESULT_OK) {
-            data?.data?.let { uri ->
-                copyToInternal(uri)
-                showList()
+        if (requestCode == REQ_PICK_PDF && resultCode == RESULT_OK) {
+            val path = data?.getStringExtra("pdf_path")
+            if (path != null) {
+                val src = File(path)
+                if (src.exists()) {
+                    // 앱 내부 저장소로 복사 후 열기
+                    val dir = File(filesDir, "pdfs").apply { mkdirs() }
+                    val dst = File(dir, src.name)
+                    try {
+                        src.inputStream().use { input ->
+                            FileOutputStream(dst).use { out -> input.copyTo(out) }
+                        }
+                        Toast.makeText(this, "저장됨: ${src.name}", Toast.LENGTH_SHORT).show()
+                        openPdf(dst)
+                    } catch (e: Exception) {
+                        Toast.makeText(this, "저장 실패: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
             }
         }
-    }
-
-    private fun copyToInternal(uri: Uri) {
-        try {
-            val dir = File(filesDir, "pdfs").apply { mkdirs() }
-            val name = queryFileName(uri) ?: "document_${System.currentTimeMillis()}.pdf"
-            val target = File(dir, name)
-
-            contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(target).use { out -> input.copyTo(out) }
-            }
-            Toast.makeText(this, "저장됨: $name", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Toast.makeText(this, "저장 실패: ${e.message}", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    private fun queryFileName(uri: Uri): String? {
-        return try {
-            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) else null
-            }
-        } catch (_: Exception) { null }
     }
 
     private fun openUri(uri: Uri) {
@@ -147,6 +131,15 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Toast.makeText(this, "열기 실패: ${e.message}", Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun queryFileName(uri: Uri): String? {
+        return try {
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) else null
+            }
+        } catch (_: Exception) { null }
     }
 
     private fun openPdf(file: File) {
@@ -170,7 +163,6 @@ class MainActivity : AppCompatActivity() {
                     .spacing(10)
                     .defaultPage(0)
                     .onLoad { pages ->
-                        // ⭐️ 여기서 it 대신 pages 사용
                         Toast.makeText(
                             this,
                             "${file.name}\n${pages} 페이지",
@@ -181,13 +173,6 @@ class MainActivity : AppCompatActivity() {
                         Toast.makeText(
                             this,
                             "PDF 오류: ${t.message}",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                    .onPageError { page, t ->
-                        Toast.makeText(
-                            this,
-                            "페이지 $page 오류: ${t.message}",
                             Toast.LENGTH_LONG
                         ).show()
                     }

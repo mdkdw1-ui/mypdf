@@ -14,4 +14,3 @@ dependencyResolutionManagement {
 }
 rootProject.name = "mypdf"
 include(":app")
-include(":pdfviewer")
