@@ -26,10 +26,11 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "../keystore.jks")
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "android"
+            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "../keystore.p12")
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "android123"
             keyAlias = System.getenv("KEY_ALIAS") ?: "mypdf"
-            keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "android123"
+            storeType = "PKCS12"
         }
     }
 
