@@ -15,7 +15,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:requestLegacyExternalStorage="true"
-        android:preserveLegacyExternalStorage="true"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
         <activity
             android:name=".MainActivity"
@@ -37,5 +36,10 @@
             android:name=".FilePickerActivity"
             android:exported="false"
             android:label="PDF 선택" />
+        <activity
+            android:name=".ReaderActivity"
+            android:exported="false"
+            android:label="PDF 뷰어"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
     </application>
 </manifest>
