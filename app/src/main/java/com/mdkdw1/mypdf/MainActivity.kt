@@ -14,6 +14,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.mdkdw1.mypdf.ui.EbookReaderScreen
+import com.mdkdw1.mypdf.PdfViewerActivity
+import android.content.Intent
 import com.mdkdw1.mypdf.ui.LibraryScreen
 
 class MainActivity : ComponentActivity() {
@@ -56,18 +58,14 @@ fun AppNavHost() {
         composable("library") {
             LibraryScreen(
                 onOpenReader = { path ->
-                    // 경로에 슬래시가 있으면 URL 인코딩
-                    val encoded = java.net.URLEncoder.encode(path, "UTF-8")
-                    nav.navigate("reader?path=$encoded")
+                    val intent = Intent(
+                        this@MainActivity,
+                        PdfViewerActivity::class.java
+                    ).apply {
+                        putExtra(PdfViewerActivity.EXTRA_PATH, path)
+                    }
+                    startActivity(intent)
                 }
-            )
-        }
-        composable("reader?path={path}") { back ->
-            val encoded = back.arguments?.getString("path") ?: return@composable
-            val path = java.net.URLDecoder.decode(encoded, "UTF-8")
-            EbookReaderScreen(
-                path = path,
-                onBack = { nav.popBackStack() }
             )
         }
     }

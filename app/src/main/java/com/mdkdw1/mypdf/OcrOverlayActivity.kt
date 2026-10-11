@@ -145,6 +145,10 @@ fun OcrOverlayScreen(
                                     progress = (i + 1) to blocks.size
                                 }
                                 blocks = updated
+                                // ⭐ 캐시 저장
+                                PdfOcrOverlay.saveCacheAfterTranslate(
+                                    context, file, pageIndex, updated
+                                )
                                 translatingAll = false
                             }
                         }

@@ -108,6 +108,48 @@ object PdfOcrOverlay {
     ): Result<Pair<Bitmap, List<TextBlock>>> {
         val bmp = PdfPageCapture.renderPage(context, file, pageIndex, maxWidth)
             ?: return Result.failure(Exception("페이지 렌더 실패"))
-        return extractBlocks(context, bmp).map { bmp to it }
+
+        // ⭐ 캐시 확인
+        val cached = OcrCache.load(context, file, pageIndex)
+        if (cached != null && cached.isNotEmpty()) {
+            val blocks = cached.map {
+                TextBlock(
+                    text = it.text,
+                    boundingBox = it.toRect(),
+                    translated = it.translated
+                )
+            }
+            return Result.success(bmp to blocks)
+        }
+
+        // OCR
+        val result = extractBlocks(context, bmp)
+        result.onSuccess { blocks ->
+            // 캐시 저장
+            OcrCache.save(context, file, pageIndex, blocks.map {
+                OcrCache.CachedBlock(
+                    it.text,
+                    it.boundingBox.left, it.boundingBox.top,
+                    it.boundingBox.right, it.boundingBox.bottom,
+                    it.translated
+                )
+            })
+        }
+        return result.map { bmp to it }
+    }
+
+    /** 번역 후 캐시 갱신 */
+    fun saveCacheAfterTranslate(
+        context: Context, file: File, pageIndex: Int,
+        blocks: List<TextBlock>
+    ) {
+        OcrCache.save(context, file, pageIndex, blocks.map {
+            OcrCache.CachedBlock(
+                it.text,
+                it.boundingBox.left, it.boundingBox.top,
+                it.boundingBox.right, it.boundingBox.bottom,
+                it.translated
+            )
+        })
     }
 }
