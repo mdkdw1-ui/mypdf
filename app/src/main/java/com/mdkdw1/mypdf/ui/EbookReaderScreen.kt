@@ -49,6 +49,9 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
     var showEyeCareDialog by remember { mutableStateOf(false) }
     var showTranslateDialog by remember { mutableStateOf(false) }
     var detectedText by remember { mutableStateOf("") }
+    var selectionMode by remember { mutableStateOf(false) }
+    var lastTapX by remember { mutableStateOf(0f) }
+    var lastTapY by remember { mutableStateOf(0f) }
     var showDictDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
@@ -103,14 +106,48 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
                         prefs.savePage(file.name, page)
                     }
                     .load()
-                // PDF 롱프레스 → 좌표의 텍스트 자동 감지 → 번역 다이얼로그
-                var lastTapX = 0f
-                var lastTapY = 0f
-                view.setOnTouchListener { _, event ->
-                    if (event.action == android.view.MotionEvent.ACTION_DOWN) {
-                        lastTapX = event.x
-                        lastTapY = event.y
+                // 선택 모드일 때만 롱프레스 활성화 (핀치 확대 보존)
+                if (selectionMode) {
+                    view.setOnTouchListener { _, event ->
+                        if (event.action == android.view.MotionEvent.ACTION_DOWN) {
+                            lastTapX = event.x
+                            lastTapY = event.y
+                        }
+                        false  // 이벤트 계속 전달 → 핀치 확대 유지
                     }
+                    view.setOnLongClickListener {
+                        scope.launch {
+                            val words = PdfTextPicker.extractWords(context, file, currentPage).getOrNull()
+                            if (words.isNullOrEmpty()) {
+                                android.widget.Toast.makeText(
+                                    context, "텍스트 없음", android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                                return@launch
+                            }
+                            val found = PdfTextPicker.findWordAt(
+                                words, lastTapX, lastTapY,
+                                view.width, view.height, 595f, 842f
+                            )
+                            if (found != null) {
+                                detectedText = found.text
+                                showTranslateDialog = true
+                                android.widget.Toast.makeText(
+                                    context, "감지: ${found.text}",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                android.widget.Toast.makeText(
+                                    context, "텍스트 감지 안 됨",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                        true
+                    }
+                } else {
+                    view.setOnTouchListener(null)
+                    view.setOnLongClickListener(null)
+                }
                     false
                 }
                 view.setOnLongClickListener {
@@ -181,7 +218,19 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
                         }
                         Icon(icon, "테마")
                     }
-                    // 번역
+                    // 🌐 통번역 (Vision)
+                    IconButton(onClick = {
+                        val intent = android.content.Intent(
+                            context, com.mdkdw1.mypdf.VisionTranslateActivity::class.java
+                        ).apply {
+                            putExtra("pdf_path", file.absolutePath)
+                            putExtra("page_index", currentPage)
+                        }
+                        context.startActivity(intent)
+                    }) {
+                        Icon(Icons.Filled.DocumentScanner, "통번역")
+                    }
+                    // 번역 (텍스트)
                     IconButton(onClick = { showTranslateDialog = true }) {
                         Icon(Icons.Filled.Translate, "번역")
                     }

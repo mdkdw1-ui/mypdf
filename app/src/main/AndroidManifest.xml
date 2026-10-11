@@ -64,6 +64,12 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <activity
+            android:name=".VisionTranslateActivity"
+            android:exported="false"
+            android:label="통번역"
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
     </application>
 
     <queries>
