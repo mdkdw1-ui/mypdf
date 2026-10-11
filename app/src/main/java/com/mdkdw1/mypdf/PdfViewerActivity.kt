@@ -309,12 +309,25 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
 
         val tapX = lastTapX
         val tapY = lastTapY
-        val viewW = pdfView.width
-        val viewH = pdfView.height
         val page = currentPage
 
+        // ⭐ PDFView 상태 수집
+        val viewW = pdfView.width
+        val viewH = pdfView.height
+
+        val pageSize = try {
+            pdfView.getPageSize(page)
+        } catch (e: Exception) { null }
+        val pageWidthPt = pageSize?.width ?: 595f
+        val pageHeightPt = pageSize?.height ?: 842f
+
+        val zoom = try { pdfView.zoom } catch (e: Exception) { 1f }
+        val scrollX = try { pdfView.currentXOffset } catch (e: Exception) { 0f }
+        val scrollY = try { pdfView.currentYOffset } catch (e: Exception) { 0f }
+
         android.util.Log.d("PdfViewer",
-            "handleLongPress: tapX=$tapX tapY=$tapY viewW=$viewW viewH=$viewH page=$page")
+            "handleLongPress: tap=($tapX, $tapY) view=${viewW}x$viewH " +
+            "page=${pageWidthPt}x$pageHeightPt zoom=$zoom scroll=($scrollX, $scrollY)")
 
         lifecycleScope.launch {
             val words = withContext(Dispatchers.IO) {
@@ -330,7 +343,16 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
             android.util.Log.d("PdfViewer", "추출 단어 수: ${words.size}")
 
             val found = PdfTextPicker.findWordAt(
-                words, tapX, tapY, viewW, viewH, 595f, 842f
+                words = words,
+                tapX = tapX,
+                tapY = tapY,
+                viewWidth = viewW,
+                viewHeight = viewH,
+                pageWidthPt = pageWidthPt,
+                pageHeightPt = pageHeightPt,
+                zoom = zoom,
+                scrollX = scrollX,
+                scrollY = scrollY
             )
 
             if (found != null) {
