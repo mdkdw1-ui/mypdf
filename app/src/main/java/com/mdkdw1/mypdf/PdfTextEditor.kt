@@ -384,71 +384,49 @@ object PdfTextEditor {
         text: String,
         fontSize: Float,
         color: Int,
-        x: Float,           // PDF 좌표 (좌하단)
-        baselineY: Float,   // 원본 baseline
-        textHeightPt: Float // 원본 텍스트 높이 (pt)
+        x: Float,
+        baselineY: Float,
+        textHeightPt: Float
     ) {
-        // 목표: 폭 = 원본 텍스트 폭, 높이 = 원본 텍스트 높이
-        // 하지만 원본 폭을 모르면 fontSize 기반으로 폭 계산
-        
         val targetHeightPt = textHeightPt.coerceAtLeast(fontSize * 0.8f)
-        
-        // 렌더 배율 (고해상도)
         val scale = 8f
-        
-        // 1) 먼저 원하는 폭을 알기 위해 폰트 크기별 측정
-        val probe = Paint().apply {
-            isAntiAlias = true
-            typeface = android.graphics.Typeface.DEFAULT
-            textSize = fontSize * scale
-        }
-        
-        // 원본 폭 추정: fontSize * text.length * 0.6 (한글 평균)
-        // 더 정확히: 원본 폭을 파라미터로 받는 게 좋지만 여기선 fontSize 기반
-        
-        // 높이 기반 bitmap
-        val fm = probe.fontMetrics
-        val textHeightPx = (fm.descent - fm.ascent)
-        
-        // 2) 폰트 크기 = targetHeightPt * scale을 약 0.75배 (여유)
-        val pxFontSize = (targetHeightPt * scale * 0.85f).coerceAtLeast(8f)
-        
+
         val paint = Paint().apply {
             isAntiAlias = true
             this.color = color
             typeface = android.graphics.Typeface.DEFAULT
-            textSize = pxFontSize
+            textSize = (targetHeightPt * scale * 0.85f).coerceAtLeast(8f)
         }
-        
-        // 3) 실제 텍스트 폭 측정
+
+        val fm = paint.fontMetrics
         val textWidthPx = paint.measureText(text).coerceAtLeast(1f)
-        
-        val fmFinal = paint.fontMetrics
-        val textHeightFinalPx = (fmFinal.descent - fmFinal.ascent).coerceAtLeast(1f)
-        
-        // 4) Bitmap 생성
+        val textHeightPx = (fm.descent - fm.ascent).coerceAtLeast(1f)
+
         val padPx = 2
         val bmpW = (textWidthPx.toInt() + padPx * 2).coerceAtLeast(1)
-        val bmpH = (textHeightFinalPx.toInt() + padPx * 2).coerceAtLeast(1)
+        val bmpH = (textHeightPx.toInt() + padPx * 2).coerceAtLeast(1)
         val bmp = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
-        
+
         val canvas = Canvas(bmp)
         canvas.drawColor(Color.TRANSPARENT)
-        canvas.drawText(text, padPx.toFloat(), padPx - fmFinal.ascent, paint)
-        
-        // 5) PDF 이미지로 삽입 (원본 폭에 맞게)
+
+        // ⭐ drawText(x, y): y는 baseline
+        // bitmap 최상단에서 baseline까지 = padPx - fm.ascent (fm.ascent는 음수)
+        val baselineFromTopPx = padPx - fm.ascent
+        canvas.drawText(text, padPx.toFloat(), baselineFromTopPx, paint)
+
         val pdImage = LosslessFactory.createFromImage(doc, bmp)
-        
-        // 이미지 pt 크기
+
         val drawW = bmpW / scale
         val drawH = bmpH / scale
-        
-        // baseline 정렬
-        // 이미지의 bottom이 baseline - descent 위치에 오도록
-        val descentPt = -fmFinal.descent / scale
-        val drawY = baselineY - descentPt - (padPx / scale)
+
+        // ⭐ bitmap 내 baseline의 bottom으로부터 거리
+        // baselineFromBottomPx = bmpH - baselineFromTopPx
+        // PDF drawY(이미지 bottom) = baselineY - (baselineFromBottomPx / scale)
+        val baselineFromBottomPx = bmpH - baselineFromTopPx
+        val drawY = baselineY - (baselineFromBottomPx / scale)
         val drawX = x - (padPx / scale)
-        
+
         cs.drawImage(pdImage, drawX, drawY, drawW, drawH)
         bmp.recycle()
     }
