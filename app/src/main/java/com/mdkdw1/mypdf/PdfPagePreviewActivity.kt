@@ -17,6 +17,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.github.barteksc.pdfviewer.PDFView
+import com.mdkdw1.mypdf.TapAwarePdfView
 import com.github.barteksc.pdfviewer.listener.OnPageChangeListener
 import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle
 import kotlinx.coroutines.Dispatchers
@@ -44,7 +45,7 @@ class PdfPagePreviewActivity : AppCompatActivity() {
         const val RESULT_PAGE_INDEX = "result_page_index"
     }
 
-    private lateinit var pdfView: PDFView
+    private lateinit var pdfView: TapAwarePdfView
     private lateinit var tvHint: TextView
     private var pageIndex = 0
     private var mode = MODE_PREVIEW
@@ -65,7 +66,7 @@ class PdfPagePreviewActivity : AppCompatActivity() {
         root.setBackgroundColor(Color.parseColor("#0D1117"))
 
         // ⭐ mhiew PDFView (핀치/스크롤 완벽)
-        pdfView = layoutInflater.inflate(R.layout.view_pdf, root, false) as PDFView
+        pdfView = layoutInflater.inflate(R.layout.view_tap_pdf, root, false) as TapAwarePdfView
         pdfView.setBackgroundColor(Color.parseColor("#0D1117"))
         root.addView(pdfView)
 
@@ -161,30 +162,13 @@ class PdfPagePreviewActivity : AppCompatActivity() {
             pageHeightPt = h
         }
 
-        // ⭐ 탭 처리 (미리보기 아닐 때만)
+        // ⭐ 탭 리스너 (모드일 때만)
         if (mode != MODE_PREVIEW) {
-            pdfView.setOnTouchListener { _, event ->
-                if (event.action == android.view.MotionEvent.ACTION_DOWN) {
-                    tapX = event.x
-                    tapY = event.y
-                    downTime = System.currentTimeMillis()
-                } else if (event.action == android.view.MotionEvent.ACTION_UP) {
-                    val duration = System.currentTimeMillis() - downTime
-                    val dx = kotlin.math.abs(event.x - tapX)
-                    val dy = kotlin.math.abs(event.y - tapY)
-                    // 짧은 탭만 (스크롤과 구분)
-                    if (duration < 250 && dx < 15 && dy < 15) {
-                        handleTap(event.x, event.y)
-                    }
-                }
-                false  // PDFView로 이벤트 계속 전달
+            pdfView.onTapListener = { x, y ->
+                handleTap(x, y)
             }
         }
     }
-
-    private var tapX = 0f
-    private var tapY = 0f
-    private var downTime = 0L
 
     /**
      * ⭐ 탭 → PDF 좌표 (mhiew의 getPageSize 기반)
