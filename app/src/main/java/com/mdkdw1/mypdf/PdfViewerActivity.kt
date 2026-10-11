@@ -310,12 +310,13 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         val tapX = lastTapX
         val tapY = lastTapY
         val page = currentPage
+        val viewW = pdfView.width
+        val viewH = pdfView.height
 
         CrashLogger.log(this, "PdfViewer",
-            "handleLongPress: tap=(${"%.1f".format(tapX)}, ${"%.1f".format(tapY)}) page=$page")
+            "tap=(${"%.1f".format(tapX)}, ${"%.1f".format(tapY)}) page=$page view=${viewW}x$viewH")
 
         lifecycleScope.launch {
-            // ⭐ 페이지 pt 크기 + 단어 추출
             val result = withContext(Dispatchers.IO) {
                 PdfTextPicker.extractWordsWithSize(this@PdfViewerActivity, file, page)
             }.getOrNull()
@@ -326,30 +327,21 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
                 return@launch
             }
 
-            // ⭐ PDFView의 페이지 오프셋 + 뷰 크기 얻기
-            val pageOffset = try {
-                pdfView.getPageOffset(page)
-            } catch (e: Exception) {
-                CrashLogger.e(this@PdfViewerActivity, "PdfViewer", "getPageOffset 실패", e)
-                null
-            }
-
-            val pageViewSize = try {
+            val pageSizePx = try {
                 pdfView.getPageSize(page)
             } catch (e: Exception) {
                 CrashLogger.e(this@PdfViewerActivity, "PdfViewer", "getPageSize 실패", e)
                 null
             }
 
-            if (pageOffset == null || pageViewSize == null) {
+            if (pageSizePx == null) {
                 Toast.makeText(this@PdfViewerActivity,
-                    "❌ 페이지 위치 정보 없음", Toast.LENGTH_LONG).show()
+                    "❌ 페이지 크기 정보 없음", Toast.LENGTH_LONG).show()
                 return@launch
             }
 
             CrashLogger.log(this@PdfViewerActivity, "PdfViewer",
-                "pageOffset=(${"%.1f".format(pageOffset.x)}, ${"%.1f".format(pageOffset.y)}) " +
-                "pageViewSize=(${pageViewSize.width}x${pageViewSize.height}) " +
+                "pageSizePx=(${pageSizePx.width}x${pageSizePx.height}) " +
                 "pagePt=(${"%.1f".format(result.pageWidthPt)}x${"%.1f".format(result.pageHeightPt)})")
 
             val found = PdfTextPicker.findWordAt(
@@ -357,12 +349,12 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
                 words = result.words,
                 tapX = tapX,
                 tapY = tapY,
-                pageOffsetX = pageOffset.x,
-                pageOffsetY = pageOffset.y,
-                pageViewWidth = pageViewSize.width.toFloat(),
-                pageViewHeight = pageViewSize.height.toFloat(),
+                pageSizePxW = pageSizePx.width.toFloat(),
+                pageSizePxH = pageSizePx.height.toFloat(),
                 pageWidthPt = result.pageWidthPt,
-                pageHeightPt = result.pageHeightPt
+                pageHeightPt = result.pageHeightPt,
+                viewWidth = viewW.toFloat(),
+                viewHeight = viewH.toFloat()
             )
 
             if (found != null) {
@@ -374,6 +366,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
             }
         }
     }
+
 
     private fun showTranslateDialog(sourceText: String) {
         val input = EditText(this)

@@ -29,7 +29,7 @@ object PdfTextPicker {
 
     data class Word(
         val text: String,
-        val x: Float,          // PDF 좌표 (좌상단 기준, pt)
+        val x: Float,
         val y: Float,
         val width: Float,
         val height: Float,
@@ -52,7 +52,6 @@ object PdfTextPicker {
             ensureInit(context)
 
             PDDocument.load(file).use { doc ->
-                // ⭐ 페이지 pt 크기 얻기
                 val page = doc.getPage(pageIndex)
                 val pageBox = page.mediaBox
                 val pageWidthPt = pageBox.width
@@ -124,39 +123,40 @@ object PdfTextPicker {
     }
 
     /**
-     * ⭐ 정확한 좌표 변환: 뷰 내 페이지 오프셋/크기 기반
-     *
-     * @param tapX, tapY 뷰 좌표계 탭 위치
-     * @param pageOffsetX, pageOffsetY 뷰 내 페이지 top-left 위치 (pdfView.getPageOffset)
-     * @param pageViewWidth, pageViewHeight 뷰 내 페이지 렌더 크기 (pdfView.getPageSize)
-     * @param pageWidthPt, pageHeightPt PDF 페이지 pt 크기 (PdfBox)
+     * 화면 탭 → PDF 단어 매칭
+     * PDFView가 뷰 중앙에 페이지를 배치한다고 가정
      */
     fun findWordAt(
         context: Context,
         words: List<Word>,
         tapX: Float, tapY: Float,
-        pageOffsetX: Float, pageOffsetY: Float,
-        pageViewWidth: Float, pageViewHeight: Float,
-        pageWidthPt: Float, pageHeightPt: Float
+        pageSizePxW: Float, pageSizePxH: Float,
+        pageWidthPt: Float, pageHeightPt: Float,
+        viewWidth: Float, viewHeight: Float
     ): Word? {
-        // 뷰 내 페이지 로컬 좌표 (픽셀)
-        val localX = tapX - pageOffsetX
-        val localY = tapY - pageOffsetY
+        val pageLeft = (viewWidth - pageSizePxW) / 2f
+        val pageTop = (viewHeight - pageSizePxH) / 2f
 
-        // pt 좌표로 변환
-        val pdfX = (localX / pageViewWidth) * pageWidthPt
-        val pdfY = (localY / pageViewHeight) * pageHeightPt
+        val localX = tapX - pageLeft
+        val localY = tapY - pageTop
+
+        val scaleX = pageSizePxW / pageWidthPt
+        val scaleY = pageSizePxH / pageHeightPt
+
+        val pdfX = localX / scaleX
+        val pdfY = localY / scaleY
 
         CrashLogger.log(context, "PdfTextPicker",
             "tap=(${"%.1f".format(tapX)}, ${"%.1f".format(tapY)}) " +
-            "pageOffset=(${"%.1f".format(pageOffsetX)}, ${"%.1f".format(pageOffsetY)}) " +
-            "pageView=${"%.0f".format(pageViewWidth)}x${"%.0f".format(pageViewHeight)} " +
+            "pageSizePx=${"%.0f".format(pageSizePxW)}x${"%.0f".format(pageSizePxH)} " +
             "pagePt=${"%.0f".format(pageWidthPt)}x${"%.0f".format(pageHeightPt)} " +
-            "→ local=(${"%.1f".format(localX)}, ${"%.1f".format(localY)}) " +
-            "pdf=(${"%.1f".format(pdfX)}, ${"%.1f".format(pdfY)})"
+            "pageLeft=${"%.1f".format(pageLeft)} pageTop=${"%.1f".format(pageTop)} " +
+            "local=(${"%.1f".format(localX)}, ${"%.1f".format(localY)}) " +
+            "scale=(${"%.2f".format(scaleX)}, ${"%.2f".format(scaleY)}) " +
+            "→ pdf=(${"%.1f".format(pdfX)}, ${"%.1f".format(pdfY)})"
         )
 
-        val threshold = 30f  // pt 단위
+        val threshold = 30f
 
         val nearest = words.minByOrNull { w ->
             val cx = w.x + w.width / 2
@@ -175,8 +175,7 @@ object PdfTextPicker {
 
             CrashLogger.log(context, "PdfTextPicker",
                 "nearest='${w.text}' center=(${"%.1f".format(cx)}, ${"%.1f".format(cy)}) " +
-                "dist=${"%.1f".format(dist)} threshold=$threshold"
-            )
+                "dist=${"%.1f".format(dist)}")
             dist < threshold
         }
     }
