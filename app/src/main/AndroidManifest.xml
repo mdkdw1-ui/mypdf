@@ -76,6 +76,13 @@
             android:label="PDF 뷰어"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".PdfEditorActivity"
+            android:exported="false"
+            android:label="PDF 편집"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
     </application>
 
     <queries>

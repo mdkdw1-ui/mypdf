@@ -207,9 +207,23 @@ class PdfViewerActivity : AppCompatActivity() {
             }
         }
 
+        val btnEdit = Button(this).apply {
+            text = "📝"
+            textSize = 22f
+            setTextColor(0xFFFFFFFF.toInt())
+            setBackgroundColor(0)
+            setPadding(40, 20, 40, 20)
+            setOnClickListener {
+                val intent = Intent(this@PdfViewerActivity, PdfEditorActivity::class.java)
+                intent.putExtra(PdfEditorActivity.EXTRA_PATH, file.absolutePath)
+                startActivity(intent)
+            }
+        }
+
         bottomBar.addView(tvPageInfo)
         bottomBar.addView(btnSelect)
         bottomBar.addView(btnOverlay)
+        bottomBar.addView(btnEdit)
         root.addView(bottomBar)
 
         setContentView(root)

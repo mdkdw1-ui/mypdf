@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [ main, androidx-pdf-ebook ]
+    branches: [ main, androidx-pdf-ebook, pdf-editor ]
   workflow_dispatch:
 
 jobs:
