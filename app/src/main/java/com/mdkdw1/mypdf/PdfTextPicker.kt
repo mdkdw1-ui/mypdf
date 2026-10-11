@@ -179,4 +179,38 @@ object PdfTextPicker {
             dist < threshold
         }
     }
+
+    /**
+     * ⭐ 직접 PDF pt 좌표로 매칭 (PdfRenderer 기반 뷰어용)
+     */
+    fun findWordAtDirect(
+        context: Context,
+        words: List<Word>,
+        pdfX: Float,
+        pdfY: Float,
+        threshold: Float = 30f
+    ): Word? {
+        val nearest = words.minByOrNull { w ->
+            val cx = w.x + w.width / 2
+            val cy = w.y + w.height / 2
+            val dx = cx - pdfX
+            val dy = cy - pdfY
+            kotlin.math.sqrt(dx * dx + dy * dy)
+        }
+
+        return nearest?.takeIf { w ->
+            val cx = w.x + w.width / 2
+            val cy = w.y + w.height / 2
+            val dx = cx - pdfX
+            val dy = cy - pdfY
+            val dist = kotlin.math.sqrt(dx * dx + dy * dy)
+
+            CrashLogger.log(context, "PdfTextPicker",
+                "pdf=(${"%.1f".format(pdfX)}, ${"%.1f".format(pdfY)}) " +
+                "nearest='${w.text}' center=(${"%.1f".format(cx)}, ${"%.1f".format(cy)}) " +
+                "dist=${"%.1f".format(dist)}")
+            dist < threshold
+        }
+    }
+
 }

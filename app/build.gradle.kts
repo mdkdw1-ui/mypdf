@@ -95,6 +95,7 @@ dependencies {
 
     // 문서 접근
     implementation("androidx.documentfile:documentfile:1.0.1")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
 
     // ⭐ ML Kit OCR (한국어 + 라틴)
     implementation("com.google.mlkit:text-recognition:16.0.1")

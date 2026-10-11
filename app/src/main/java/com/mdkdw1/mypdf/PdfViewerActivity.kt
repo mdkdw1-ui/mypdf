@@ -1,107 +1,46 @@
 package com.mdkdw1.mypdf
 
 import android.content.Intent
-import android.os.Build
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
 import android.os.Bundle
-import android.view.GestureDetector
+import android.os.Handler
+import android.os.Looper
+import android.os.ParcelFileDescriptor
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
-import com.github.barteksc.pdfviewer.PDFView
-import com.github.barteksc.pdfviewer.listener.OnPageChangeListener
-import com.github.barteksc.pdfviewer.listener.OnLoadCompleteListener
-import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompleteListener {
-
-    // ⭐ PDFView 커스텀 — dispatchTouchEvent로 롱프레스 감지 (스크롤/핀치 유지)
-    private inner class TouchablePdfView(context: android.content.Context) : PDFView(context, null) {
-        private val handler = android.os.Handler(android.os.Looper.getMainLooper())
-        private var longPressRunnable: Runnable? = null
-        private var downX = 0f
-        private var downY = 0f
-        private var longPressFired = false
-
-        override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    lastTapX = event.x
-                    lastTapY = event.y
-                    downX = event.x
-                    downY = event.y
-                    longPressFired = false
-
-                    CrashLogger.log(context,
-                        "PdfViewer", "DOWN selection=$selectionMode x=${event.x} y=${event.y}")
-
-                    // ⭐ 선택 모드일 때만 롱프레스 타이머 시작
-                    if (selectionMode) {
-                        longPressRunnable?.let { handler.removeCallbacks(it) }
-                        longPressRunnable = Runnable {
-                            if (!longPressFired) {
-                                longPressFired = true
-                                CrashLogger.log(context, "PdfViewer", "LONG PRESS FIRED!")
-                                handleLongPress()
-                            }
-                        }
-                        handler.postDelayed(longPressRunnable!!, 600L)
-                    }
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    // 움직임이 크면 롱프레스 취소 (스크롤 의도)
-                    val dx = kotlin.math.abs(event.x - downX)
-                    val dy = kotlin.math.abs(event.y - downY)
-                    if (dx > 20f || dy > 20f) {
-                        if (!longPressFired) {
-                            longPressRunnable?.let { handler.removeCallbacks(it) }
-                            longPressRunnable = null
-                        }
-                    }
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (!longPressFired) {
-                        longPressRunnable?.let { handler.removeCallbacks(it) }
-                        longPressRunnable = null
-                    }
-                }
-            }
-            // ⭐ PDFView의 원래 터치 처리는 그대로 유지 (스크롤/핀치 작동)
-            return super.dispatchTouchEvent(event)
-        }
-    }
+class PdfViewerActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_PATH = "pdf_path"
     }
 
-    private lateinit var pdfView: PDFView
+    private lateinit var recyclerView: RecyclerView
+    private lateinit var adapter: PdfPageAdapter
     private lateinit var tvPageInfo: TextView
     private lateinit var tvFileName: TextView
     private lateinit var btnSelect: Button
     private lateinit var prefs: ReadingPrefs
     private lateinit var file: File
-
+    private lateinit var pdfRenderer: PdfRenderer
+    private lateinit var pfd: ParcelFileDescriptor
     private var pageCount = 0
     private var currentPage = 0
     private var selectionMode = false
-
-    private var lastTapX = 0f
-    private var lastTapY = 0f
-
-    // ⭐ GestureDetector (롱프레스 감지)
-    private lateinit var gestureDetector: GestureDetector
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -112,261 +51,301 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
 
         prefs = ReadingPrefs(this)
 
-        if (prefs.keepScreenOn) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // ⭐ PDFRenderer 열기
+        pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+        pdfRenderer = PdfRenderer(pfd)
+        pageCount = pdfRenderer.pageCount
+
+        CrashLogger.log(this, "PdfViewer", "PDF 열기: $pageCount 페이지")
+
+        val screenWidth = resources.displayMetrics.widthPixels
+
+        // ⭐ 모든 페이지 렌더링
+        val pages = mutableListOf<PdfPageAdapter.PageData>()
+        for (i in 0 until pageCount) {
+            try {
+                pdfRenderer.openPage(i).use { page ->
+                    val bitmap = renderPage(page, screenWidth)
+                    if (bitmap != null) {
+                        pages.add(PdfPageAdapter.PageData(
+                            index = i,
+                            bitmap = bitmap,
+                            widthPt = page.width.toFloat(),
+                            heightPt = page.height.toFloat()
+                        ))
+                        CrashLogger.log(this, "PdfViewer",
+                            "페이지 $i 렌더: bitmap=${bitmap.width}x${bitmap.height} pt=${page.width}x${page.height}")
+                    }
+                }
+            } catch (e: Exception) {
+                CrashLogger.e(this, "PdfViewer", "페이지 $i 렌더 실패", e)
+            }
         }
 
-        // ⭐ GestureDetector 초기화
-        gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent): Boolean {
-                lastTapX = e.x
-                lastTapY = e.y
-                android.util.Log.d("PdfViewer", "onDown x=${e.x} y=${e.y} selection=$selectionMode")
-                return true
-            }
+        if (pages.isEmpty()) {
+            Toast.makeText(this, "❌ PDF 로드 실패", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
 
-            override fun onLongPress(e: MotionEvent) {
-                android.util.Log.d("PdfViewer", "⭐ onLongPress! selection=$selectionMode")
-                if (selectionMode) {
-                    lastTapX = e.x
-                    lastTapY = e.y
-                    handleLongPress()
-                }
-            }
-
-            override fun onSingleTapUp(e: MotionEvent): Boolean {
-                android.util.Log.d("PdfViewer", "onSingleTapUp")
-                return false
-            }
-        })
-
+        // ── 루트 ──
         val root = FrameLayout(this)
 
-        // ── PDFView (커스텀 클래스) ──
-        pdfView = TouchablePdfView(this)
-        pdfView.layoutParams = FrameLayout.LayoutParams(
+        // ── RecyclerView ──
+        recyclerView = RecyclerView(this)
+        recyclerView.layoutManager = LinearLayoutManager(this)
+        recyclerView.setBackgroundColor(Color.parseColor("#1A1A1A"))
+        recyclerView.layoutParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
-        root.addView(pdfView)
+        root.addView(recyclerView)
 
-        // ── 상단 툴바 (최소) ──
-        val toolbar = LinearLayout(this)
-        toolbar.orientation = LinearLayout.HORIZONTAL
-        toolbar.setBackgroundColor(0xCC000000.toInt())
-        toolbar.setPadding(8, 8, 8, 8)
-        toolbar.gravity = Gravity.CENTER_VERTICAL
-        val toolbarLp = FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        toolbarLp.gravity = Gravity.TOP
-        toolbar.layoutParams = toolbarLp
+        adapter = PdfPageAdapter(pages)
+        recyclerView.adapter = adapter
 
-        val btnClose = Button(this)
-        btnClose.text = "✕"
-        btnClose.setTextColor(0xFFFFFFFF.toInt())
-        btnClose.setBackgroundColor(0)
-        btnClose.setOnClickListener { finish() }
+        // ── 상단 툴바 ──
+        val toolbar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(0xCC000000.toInt())
+            setPadding(8, 8, 8, 8)
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { gravity = Gravity.TOP }
+        }
 
-        tvFileName = TextView(this)
-        tvFileName.setTextColor(0xFFFFFFFF.toInt())
-        tvFileName.textSize = 12f
-        tvFileName.maxLines = 1
-        tvFileName.ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-        tvFileName.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        tvFileName.setPadding(16, 0, 8, 0)
+        val btnClose = Button(this).apply {
+            text = "✕"
+            setTextColor(0xFFFFFFFF.toInt())
+            setBackgroundColor(0)
+            setOnClickListener { finish() }
+        }
 
-        val btnSettings = Button(this)
-        btnSettings.text = "⚙"
-        btnSettings.setTextColor(0xFFFFFFFF.toInt())
-        btnSettings.setBackgroundColor(0)
-        btnSettings.setOnClickListener {
-            startActivity(Intent(this@PdfViewerActivity, LogActivity::class.java))
+        tvFileName = TextView(this).apply {
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 12f
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            setPadding(16, 0, 8, 0)
+            text = file.name
         }
 
         toolbar.addView(btnClose)
         toolbar.addView(tvFileName)
-        toolbar.addView(btnSettings)
         root.addView(toolbar)
 
         // ── 하단 바 ──
-        val bottomBar = LinearLayout(this)
-        bottomBar.orientation = LinearLayout.HORIZONTAL
-        bottomBar.setBackgroundColor(0xDD000000.toInt())
-        bottomBar.setPadding(8, 16, 8, 16)
-        bottomBar.gravity = Gravity.CENTER_VERTICAL
-        val bottomLp = FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        bottomLp.gravity = Gravity.BOTTOM
-        bottomBar.layoutParams = bottomLp
-
-        // ⭐ 시스템 네비게이션 바 높이만큼 하단 패딩 추가
-        ViewCompat.setOnApplyWindowInsetsListener(bottomBar) { v, insets ->
-            val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
-            v.setPadding(8, 16, 8, 16 + navBars.bottom)
-            insets
+        val bottomBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(0xDD000000.toInt())
+            setPadding(8, 16, 8, 16)
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { gravity = Gravity.BOTTOM }
         }
 
-        val btnPrev = Button(this)
-        btnPrev.text = "◀"
-        btnPrev.textSize = 18f
-        btnPrev.setTextColor(0xFFFFFFFF.toInt())
-        btnPrev.setBackgroundColor(0)
-        btnPrev.setPadding(40, 20, 40, 20)
-        btnPrev.setOnClickListener {
-            if (currentPage > 0) pdfView.jumpTo(currentPage - 1)
+        tvPageInfo = TextView(this).apply {
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 13f
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            text = "1 / $pageCount"
         }
 
-        tvPageInfo = TextView(this)
-        tvPageInfo.setTextColor(0xFFFFFFFF.toInt())
-        tvPageInfo.textSize = 13f
-        tvPageInfo.gravity = Gravity.CENTER
-        tvPageInfo.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        tvPageInfo.text = "0 / 0"
-
-        val btnNext = Button(this)
-        btnNext.text = "▶"
-        btnNext.textSize = 18f
-        btnNext.setTextColor(0xFFFFFFFF.toInt())
-        btnNext.setBackgroundColor(0)
-        btnNext.setPadding(40, 20, 40, 20)
-        btnNext.setOnClickListener {
-            if (currentPage < pageCount - 1) pdfView.jumpTo(currentPage + 1)
+        btnSelect = Button(this).apply {
+            text = "✏"
+            textSize = 22f
+            setTextColor(0xFFFFFFFF.toInt())
+            setBackgroundColor(0)
+            setPadding(40, 20, 40, 20)
+            setOnClickListener {
+                selectionMode = !selectionMode
+                setBackgroundColor(if (selectionMode) 0xFFFF6B9D.toInt() else 0)
+                Toast.makeText(
+                    this@PdfViewerActivity,
+                    if (selectionMode) "선택 모드 ON — 길게 눌러 번역" else "OFF",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
 
-        btnSelect = Button(this)
-        btnSelect.text = "✏"
-        btnSelect.textSize = 22f
-        btnSelect.setTextColor(0xFFFFFFFF.toInt())
-        btnSelect.setBackgroundColor(0)
-        btnSelect.setPadding(40, 20, 40, 20)
-        btnSelect.setOnClickListener {
-            selectionMode = !selectionMode
-            btnSelect.setBackgroundColor(if (selectionMode) 0xFFFF6B9D.toInt() else 0)
-            Toast.makeText(
-                this@PdfViewerActivity,
-                if (selectionMode) "선택 모드 ON — 길게 눌러 번역" else "선택 모드 OFF",
-                Toast.LENGTH_SHORT
-            ).show()
+        val btnOverlay = Button(this).apply {
+            text = "🎨"
+            textSize = 22f
+            setTextColor(0xFFFFFFFF.toInt())
+            setBackgroundColor(0)
+            setPadding(40, 20, 40, 20)
+            setOnClickListener {
+                val intent = Intent(this@PdfViewerActivity, OcrOverlayActivity::class.java)
+                intent.putExtra("pdf_path", file.absolutePath)
+                intent.putExtra("page_index", currentPage)
+                startActivity(intent)
+            }
         }
 
-        val btnOverlay = Button(this)
-        btnOverlay.text = "🎨"
-        btnOverlay.textSize = 22f
-        btnOverlay.setTextColor(0xFFFFFFFF.toInt())
-        btnOverlay.setBackgroundColor(0)
-        btnOverlay.setPadding(40, 20, 40, 20)
-        btnOverlay.setOnClickListener {
-            val intent = Intent(this@PdfViewerActivity, OcrOverlayActivity::class.java)
-            intent.putExtra("pdf_path", file.absolutePath)
-            intent.putExtra("page_index", currentPage)
-            startActivity(intent)
-        }
-
-        bottomBar.addView(btnPrev)
         bottomBar.addView(tvPageInfo)
-        bottomBar.addView(btnNext)
         bottomBar.addView(btnSelect)
         bottomBar.addView(btnOverlay)
         root.addView(bottomBar)
 
         setContentView(root)
 
-        loadPdf()
+        // ⭐ 롱프레스 감지 (RecyclerView OnItemTouchListener)
+        setupLongPress(pages)
+
+        // 페이지 추적
+        recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
+                val lm = rv.layoutManager as LinearLayoutManager
+                val first = lm.findFirstVisibleItemPosition()
+                if (first >= 0 && first != currentPage) {
+                    currentPage = first
+                    tvPageInfo.text = "${first + 1} / $pageCount"
+                    prefs.savePage(file.name, first)
+                }
+            }
+        })
+
+        // 저장된 페이지로 이동
+        val savedPage = prefs.getPage(file.name)
+        if (savedPage > 0 && savedPage < pageCount) {
+            recyclerView.scrollToPosition(savedPage)
+        }
     }
 
-    private fun loadPdf() {
-        tvFileName.text = file.name
-
-        pdfView.fromFile(file)
-            .enableSwipe(true)
-            .swipeHorizontal(false)
-            .enableDoubletap(true)
-            .enableAntialiasing(true)
-            .spacing(10)
-            .defaultPage(prefs.getPage(file.name))
-            .scrollHandle(DefaultScrollHandle(this))
-            .onLoad(this)
-            .onPageChange(this)
-            .load()
-
-        pdfView.setMaxZoom(5.0f)
-        pdfView.setMinZoom(0.5f)
-        pdfView.useBestQuality(true)
+    private fun renderPage(page: PdfRenderer.Page, targetWidth: Int): Bitmap? {
+        return try {
+            val scale = targetWidth.toFloat() / page.width
+            val height = (page.height * scale).toInt()
+            val bitmap = Bitmap.createBitmap(targetWidth, height, Bitmap.Config.ARGB_8888)
+            bitmap.eraseColor(Color.WHITE)
+            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            bitmap
+        } catch (e: Exception) {
+            null
+        }
     }
 
-    private fun handleLongPress() {
+    /**
+     * ⭐ RecyclerView에 롱프레스 감지 (스크롤과 공존)
+     */
+    private fun setupLongPress(pages: List<PdfPageAdapter.PageData>) {
+        val handler = Handler(Looper.getMainLooper())
+        var runnable: Runnable? = null
+        var downX = 0f
+        var downY = 0f
+        var downChild: View? = null
+        var downChildX = 0f
+        var downChildY = 0f
+
+        recyclerView.addOnItemTouchListener(object : RecyclerView.OnItemTouchListener {
+            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                when (e.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downX = e.x
+                        downY = e.y
+                        downChild = rv.findChildViewUnder(e.x, e.y)
+                        downChild?.let { child ->
+                            downChildX = e.x - child.left
+                            downChildY = e.y - child.top
+                        }
+
+                        if (selectionMode && downChild != null) {
+                            runnable = Runnable {
+                                val child = downChild
+                                if (child != null) {
+                                    val pos = rv.getChildAdapterPosition(child)
+                                    if (pos >= 0 && pos < pages.size) {
+                                        val page = pages[pos]
+                                        CrashLogger.log(
+                                            this@PdfViewerActivity, "PdfViewer",
+                                            "LONG PRESS: page=$pos tap=(${"%.1f".format(downChildX)}, ${"%.1f".format(downChildY)}) " +
+                                            "view=${child.width}x${child.height} " +
+                                            "bitmap=${page.bitmap.width}x${page.bitmap.height} " +
+                                            "pt=${page.widthPt}x${page.heightPt}"
+                                        )
+                                        onPageLongPress(
+                                            page,
+                                            downChildX, downChildY,
+                                            child.width.toFloat(), child.height.toFloat()
+                                        )
+                                    }
+                                }
+                            }
+                            handler.postDelayed(runnable!!, 600L)
+                        }
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        if (kotlin.math.abs(e.x - downX) > 20f ||
+                            kotlin.math.abs(e.y - downY) > 20f) {
+                            runnable?.let { handler.removeCallbacks(it) }
+                            runnable = null
+                        }
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        runnable?.let { handler.removeCallbacks(it) }
+                        runnable = null
+                    }
+                }
+                return false
+            }
+            override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {}
+            override fun onRequestDisallowInterceptTouchEvent(p: Boolean) {}
+        })
+    }
+
+    /**
+     * ⭐ 좌표 변환: 뷰 좌표 → PDF pt (1:1 매핑)
+     */
+    private fun onPageLongPress(
+        page: PdfPageAdapter.PageData,
+        tapX: Float, tapY: Float,
+        viewW: Float, viewH: Float
+    ) {
         val apiKey = prefs.groqApiKey
         if (apiKey.isNullOrBlank()) {
             Toast.makeText(this, "⚙ 설정에서 Groq API 키를 입력하세요", Toast.LENGTH_LONG).show()
             return
         }
 
-        Toast.makeText(this, "🔍 텍스트 감지 중...", Toast.LENGTH_SHORT).show()
-
-        val tapX = lastTapX
-        val tapY = lastTapY
-        val page = currentPage
-        val viewW = pdfView.width
-        val viewH = pdfView.height
+        // 뷰 좌표 → PDF pt
+        val pdfX = tapX / viewW * page.widthPt
+        val pdfY = tapY / viewH * page.heightPt
 
         CrashLogger.log(this, "PdfViewer",
-            "tap=(${"%.1f".format(tapX)}, ${"%.1f".format(tapY)}) page=$page view=${viewW}x$viewH")
+            "→ pdf=(${"%.1f".format(pdfX)}, ${"%.1f".format(pdfY)})")
+
+        Toast.makeText(this, "🔍 텍스트 감지 중...", Toast.LENGTH_SHORT).show()
 
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                PdfTextPicker.extractWordsWithSize(this@PdfViewerActivity, file, page)
+                PdfTextPicker.extractWordsWithSize(this@PdfViewerActivity, file, page.index)
             }.getOrNull()
 
             if (result == null || result.words.isEmpty()) {
-                Toast.makeText(this@PdfViewerActivity,
-                    "❌ 텍스트 추출 실패", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@PdfViewerActivity, "❌ 텍스트 추출 실패", Toast.LENGTH_LONG).show()
                 return@launch
             }
 
-            val pageSizePx = try {
-                pdfView.getPageSize(page)
-            } catch (e: Exception) {
-                CrashLogger.e(this@PdfViewerActivity, "PdfViewer", "getPageSize 실패", e)
-                null
-            }
-
-            if (pageSizePx == null) {
-                Toast.makeText(this@PdfViewerActivity,
-                    "❌ 페이지 크기 정보 없음", Toast.LENGTH_LONG).show()
-                return@launch
-            }
-
-            CrashLogger.log(this@PdfViewerActivity, "PdfViewer",
-                "pageSizePx=(${pageSizePx.width}x${pageSizePx.height}) " +
-                "pagePt=(${"%.1f".format(result.pageWidthPt)}x${"%.1f".format(result.pageHeightPt)})")
-
-            val found = PdfTextPicker.findWordAt(
+            val found = PdfTextPicker.findWordAtDirect(
                 context = this@PdfViewerActivity,
                 words = result.words,
-                tapX = tapX,
-                tapY = tapY,
-                pageSizePxW = pageSizePx.width.toFloat(),
-                pageSizePxH = pageSizePx.height.toFloat(),
-                pageWidthPt = result.pageWidthPt,
-                pageHeightPt = result.pageHeightPt,
-                viewWidth = viewW.toFloat(),
-                viewHeight = viewH.toFloat()
+                pdfX = pdfX,
+                pdfY = pdfY
             )
 
             if (found != null) {
-                CrashLogger.log(this@PdfViewerActivity, "PdfViewer", "감지: ${found.text}")
                 showTranslateDialog(found.text)
             } else {
-                Toast.makeText(this@PdfViewerActivity,
-                    "❌ 위치 매칭 실패", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@PdfViewerActivity, "❌ 위치 매칭 실패", Toast.LENGTH_LONG).show()
             }
         }
     }
-
 
     private fun showTranslateDialog(sourceText: String) {
         val input = EditText(this)
@@ -425,18 +404,9 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
             .show()
     }
 
-    override fun loadComplete(nbPages: Int) {
-        pageCount = nbPages
-        runOnUiThread {
-            tvPageInfo.text = "1 / $nbPages"
-        }
-    }
-
-    override fun onPageChanged(page: Int, pageCount: Int) {
-        currentPage = page
-        prefs.savePage(file.name, page)
-        runOnUiThread {
-            tvPageInfo.text = "${page + 1} / $pageCount"
-        }
+    override fun onDestroy() {
+        try { pdfRenderer.close() } catch (_: Exception) {}
+        try { pfd.close() } catch (_: Exception) {}
+        super.onDestroy()
     }
 }
