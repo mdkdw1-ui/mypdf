@@ -363,7 +363,7 @@ class PdfEditorActivity : AppCompatActivity() {
         lifecycleScope.launch {
             PdfAnnotation.addCircle(
                 this@PdfEditorActivity, file, originalIndex,
-                100f, 400f, 150f, 150f, Color.RED, 2f
+                175f, 475f, 75f, Color.RED, 2f
             ).fold(
                 onSuccess = {
                     refreshThumb(originalIndex)
