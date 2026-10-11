@@ -115,7 +115,7 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
                 }
                 view.setOnLongClickListener {
                     scope.launch {
-                        val words = PdfTextPicker.extractWords(file, currentPage).getOrNull()
+                        val words = PdfTextPicker.extractWords(context, file, currentPage).getOrNull()
                         if (words.isNullOrEmpty()) {
                             android.widget.Toast.makeText(
                                 context, "텍스트를 찾을 수 없습니다",

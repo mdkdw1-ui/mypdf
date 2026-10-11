@@ -2,14 +2,21 @@ package com.mdkdw1.mypdf
 
 import android.app.Application
 import android.content.Intent
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 
 class MyApplication : Application() {
-
     override fun onCreate() {
         super.onCreate()
 
-        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        // ⭐ PdfBox 초기화 — 반드시 최우선
+        try {
+            PDFBoxResourceLoader.init(applicationContext)
+            CrashLogger.log(this, "APP", "PdfBox OK (glyphlist 로드)")
+        } catch (e: Throwable) {
+            CrashLogger.e(this, "APP", "PdfBox 실패", e as? Exception ?: Exception(e))
+        }
 
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
                 CrashLogger.logCrash(this, throwable)
