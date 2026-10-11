@@ -278,7 +278,7 @@ object PdfTextEditor {
                                 "교체(Bitmap): '${word.text}' → '$newText'")
                         } else {
                             // ⭐ 원본 폰트 찾기
-                            val originalFont: PDFont? = when {
+                            val originalFont: PDFont = when {
                                 hasKorean && koreanFont != null -> koreanFont
                                 else -> {
                                     // 1) 이름 그대로 매칭
