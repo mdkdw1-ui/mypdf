@@ -72,7 +72,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         toolbar.layoutParams = toolbarLp
 
         val btnClose = Button(this)
-        btnClose.text = "✕"
+        btnClose.setText("✕")
         btnClose.setTextColor(0xFFFFFFFF.toInt())
         btnClose.setBackgroundColor(0)
         btnClose.setOnClickListener { finish() }
@@ -86,7 +86,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         tvFileName.setPadding(16, 0, 8, 0)
 
         val btnSelect = Button(this)
-        btnSelect.text = "✏"
+        btnSelect.setText("✏")
         btnSelect.setTextColor(0xFFFFFFFF.toInt())
         btnSelect.setBackgroundColor(0)
         btnSelect.setOnClickListener {
@@ -100,7 +100,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         }
 
         val btnOverlay = Button(this)
-        btnOverlay.text = "🎨"
+        btnOverlay.setText("🎨")
         btnOverlay.setTextColor(0xFFFFFFFF.toInt())
         btnOverlay.setBackgroundColor(0)
         btnOverlay.setOnClickListener {
@@ -111,7 +111,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         }
 
         val btnSettings = Button(this)
-        btnSettings.text = "⚙"
+        btnSettings.setText("⚙")
         btnSettings.setTextColor(0xFFFFFFFF.toInt())
         btnSettings.setBackgroundColor(0)
         btnSettings.setOnClickListener {
@@ -139,7 +139,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         bottomBar.layoutParams = bottomLp
 
         val btnPrev = Button(this)
-        btnPrev.text = "◀"
+        btnPrev.setText("◀")
         btnPrev.setOnClickListener {
             if (currentPage > 0) pdfView.jumpTo(currentPage - 1)
         }
@@ -148,10 +148,10 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         tvPageInfo.setTextColor(0xFFFFFFFF.toInt())
         tvPageInfo.textSize = 14f
         tvPageInfo.setPadding(24, 0, 24, 0)
-        tvPageInfo.text = "0 / 0"
+        tvPageInfo.setText("0 / 0")
 
         val btnNext = Button(this)
-        btnNext.text = "▶"
+        btnNext.setText("▶")
         btnNext.setOnClickListener {
             if (currentPage < pageCount - 1) pdfView.jumpTo(currentPage + 1)
         }
@@ -189,7 +189,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
     }
 
     private fun loadPdf() {
-        tvFileName.text = file.name
+        tvFileName.setText(file.name)
 
         pdfView.fromFile(file)
             .enableSwipe(true)
@@ -244,11 +244,11 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         }
     }
 
-    private fun showTranslateDialog(text: String) {
+    private fun showTranslateDialog(sourceText: String) {
         // ── 입력 필드 ──
         val input = EditText(this)
-        input.setText(text)
-        input.setSelection(text.length)
+        input.setText(sourceText)
+        input.setSelection(sourceText.length)
 
         // ── 출력 필드 ──
         val output = TextView(this)
@@ -258,13 +258,13 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
 
         // ── 라벨 1 ──
         val label1 = TextView(this)
-        label1.text = "텍스트:"
+        label1.setText("텍스트:")
         label1.setTextColor(0xFF888888.toInt())
         label1.textSize = 11f
 
         // ── 라벨 2 ──
         val label2 = TextView(this)
-        label2.text = "번역:"
+        label2.setText("번역:")
         label2.setTextColor(0xFF888888.toInt())
         label2.textSize = 11f
         label2.setPadding(0, 16, 0, 8)
@@ -290,7 +290,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
             .setView(container)
             .setPositiveButton("번역") { _, _ ->
                 val apiKey = prefs.groqApiKey ?: return@setPositiveButton
-                output.text = "번역 중..."
+                output.setText("번역 중...")
                 lifecycleScope.launch {
                     val result = withContext(Dispatchers.IO) {
                         GroqTranslator.translate(
@@ -298,8 +298,8 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
                         )
                     }
                     result.fold(
-                        onSuccess = { output.text = it },
-                        onFailure = { output.text = "오류: ${it.message}" }
+                        onSuccess = { output.setText(it) },
+                        onFailure = { output.setText("오류: ${it.message}") }
                     )
                 }
             }
@@ -310,7 +310,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
     override fun loadComplete(nbPages: Int) {
         pageCount = nbPages
         runOnUiThread {
-            tvPageInfo.text = "1 / $nbPages"
+            tvPageInfo.setText("1 / $nbPages")
         }
     }
 
@@ -318,7 +318,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         currentPage = page
         prefs.savePage(file.name, page)
         runOnUiThread {
-            tvPageInfo.text = "${page + 1} / $pageCount"
+            tvPageInfo.setText("${page + 1} / $pageCount")
         }
     }
 }
