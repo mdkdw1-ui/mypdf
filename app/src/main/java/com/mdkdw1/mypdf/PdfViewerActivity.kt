@@ -26,6 +26,21 @@ import java.io.File
 
 class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompleteListener {
 
+    // ⭐ PDFView를 상속한 커스텀 뷰 — onTouchEvent만 오버라이드
+    private inner class TouchablePdfView(context: android.content.Context) : PDFView(context, null) {
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            // 좌표 기록
+            if (event.action == MotionEvent.ACTION_DOWN) {
+                lastTapX = event.x
+                lastTapY = event.y
+            }
+            // GestureDetector에 전달 (롱프레스 감지)
+            gestureDetector.onTouchEvent(event)
+            // ⭐ PDFView 원래 동작 (스크롤/핀치) 유지
+            return super.onTouchEvent(event)
+        }
+    }
+
     companion object {
         const val EXTRA_PATH = "pdf_path"
     }
@@ -86,23 +101,13 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
 
         val root = FrameLayout(this)
 
-        // ── PDFView ──
-        pdfView = layoutInflater.inflate(R.layout.view_pdf, root, false) as PDFView
+        // ── PDFView (커스텀 클래스) ──
+        pdfView = TouchablePdfView(this)
         pdfView.layoutParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
         root.addView(pdfView)
-
-        // ⭐ PDFView에 GestureDetector 연결
-        pdfView.setOnTouchListener { _, event ->
-            if (event.action == MotionEvent.ACTION_DOWN) {
-                lastTapX = event.x
-                lastTapY = event.y
-            }
-            gestureDetector.onTouchEvent(event)
-            false  // PDFView가 자체 스크롤/핀치 처리
-        }
 
         // ── 상단 툴바 (최소) ──
         val toolbar = LinearLayout(this)
