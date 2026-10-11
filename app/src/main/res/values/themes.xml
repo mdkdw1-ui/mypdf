@@ -1,7 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- 기존 앱 테마 -->
     <style name="Theme.Material3.DayNight.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- ⭐ 다크 다이얼로그 테마 -->
+    <style name="DarkDialogTheme" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">#1E1E1E</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#CCCCCC</item>
+        <item name="android:textColorAlertDialogListItem">#FFFFFF</item>
+        <item name="colorAccent">#FF6B9D</item>
+        <item name="android:colorAccent">#FF6B9D</item>
+        <item name="android:textColor">#FFFFFF</item>
     </style>
 </resources>

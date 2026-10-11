@@ -1,6 +1,7 @@
 package com.mdkdw1.mypdf
 
 import android.app.Activity
+import com.mdkdw1.mypdf.R
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -64,12 +65,16 @@ class PdfPagePreviewActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
-            // ⭐ FIT_CENTER: 이미지 중앙 배치 (핀치 초점 정상화)
+            // ⭐ 핀치 초점 정상화
             scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            setZoomable(true)
+            // 더블탭 배율
             minimumScale = 1f
             mediumScale = 2f
             maximumScale = 8f
             setBackgroundColor(Color.parseColor("#0D1117"))
+            // ⭐ 애니메이션 활성 (부드러운 확대)
+            setAnimateOnUserGesture(true)
         }
         root.addView(photoView)
 
@@ -215,7 +220,7 @@ class PdfPagePreviewActivity : AppCompatActivity() {
             addView(sizeInput)
         }
 
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("➕ 텍스트 추가")
             .setView(container)
             .setPositiveButton("추가") { _, _ ->
@@ -251,7 +256,7 @@ class PdfPagePreviewActivity : AppCompatActivity() {
     }
 
     private fun performHighlight(x: Float, y: Float) {
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("🖍 하이라이트")
             .setItems(arrayOf("노랑", "초록", "핑크", "파랑")) { _, which ->
                 val color = when (which) {
@@ -288,7 +293,7 @@ class PdfPagePreviewActivity : AppCompatActivity() {
         val input = makeStyledEditText("메모 내용").apply {
             minLines = 3
         }
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("📌 스티키 노트")
             .setView(input)
             .setPositiveButton("추가") { _, _ ->
@@ -318,7 +323,7 @@ class PdfPagePreviewActivity : AppCompatActivity() {
     }
 
     private fun showRectangleDialog(x: Float, y: Float) {
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("⬜ 사각형 크기")
             .setItems(arrayOf("작게 (100x50)", "중간 (200x100)", "크게 (300x150)")) { _, which ->
                 val (w, h) = when (which) {
@@ -348,7 +353,7 @@ class PdfPagePreviewActivity : AppCompatActivity() {
     }
 
     private fun showCircleDialog(x: Float, y: Float) {
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("⭕ 원 크기")
             .setItems(arrayOf("작게 (r=30)", "중간 (r=60)", "크게 (r=100)")) { _, which ->
                 val r = when (which) {

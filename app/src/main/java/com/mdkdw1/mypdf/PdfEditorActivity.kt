@@ -341,7 +341,7 @@ class PdfEditorActivity : AppCompatActivity() {
             setPadding(16, 16, 16, 16)
         }
 
-        val dialog = AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("📄 페이지 ${currentPos + 1}")
             .setView(gridView)
             .setNegativeButton("닫기", null)
@@ -407,7 +407,7 @@ class PdfEditorActivity : AppCompatActivity() {
             "📄 이 페이지만 추출"
         )
 
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("페이지 ${currentPos + 1} 편집")
             .setItems(options) { _, which ->
                 when (which) {
@@ -503,7 +503,7 @@ class PdfEditorActivity : AppCompatActivity() {
 
     private fun addStickyNoteOld(originalIndex: Int) {
         val input = makeStyledEditText("메모 내용")
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("스티키 노트")
             .setView(input)
             .setPositiveButton("추가") { _, _ ->
@@ -585,7 +585,7 @@ class PdfEditorActivity : AppCompatActivity() {
             Toast.makeText(this, "최소 1페이지 필요", Toast.LENGTH_SHORT).show()
             return
         }
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("페이지 삭제")
             .setMessage("이 페이지를 삭제할까요?")
             .setPositiveButton("삭제") { _, _ ->
@@ -652,7 +652,7 @@ class PdfEditorActivity : AppCompatActivity() {
         val labels = pageInfos.mapIndexed { i, _ -> "페이지 ${i + 1}" }.toTypedArray()
         var selectedPage = currentPageIndex
 
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("주석 추가할 페이지 선택")
             .setSingleChoiceItems(labels, currentPageIndex) { _, which ->
                 selectedPage = which
@@ -672,7 +672,7 @@ class PdfEditorActivity : AppCompatActivity() {
             "🏷 텍스트 스탬프 (현재 페이지)"
         )
 
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("워터마크")
             .setItems(options) { _, which ->
                 when (which) {
@@ -689,7 +689,7 @@ class PdfEditorActivity : AppCompatActivity() {
         val input = makeStyledEditText("워터마크 텍스트").apply {
             setText("CONFIDENTIAL")
         }
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("텍스트 워터마크")
             .setView(input)
             .setPositiveButton("추가") { _, _ ->
@@ -716,7 +716,7 @@ class PdfEditorActivity : AppCompatActivity() {
 
     private fun showStampInput() {
         val input = makeStyledEditText("스탬프 텍스트")
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("텍스트 스탬프 (페이지 ${currentPageIndex + 1})")
             .setView(input)
             .setPositiveButton("추가") { _, _ ->
@@ -752,7 +752,7 @@ class PdfEditorActivity : AppCompatActivity() {
             "🧹 모든 캐시 삭제",
             "ℹ️ 파일 정보"
         )
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("더보기")
             .setItems(options) { _, which ->
                 when (which) {
@@ -775,7 +775,7 @@ class PdfEditorActivity : AppCompatActivity() {
         val labels = pageInfos.mapIndexed { i, _ -> "페이지 ${i + 1}" }.toTypedArray()
         val checked = BooleanArray(pageInfos.size)
 
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("추출할 페이지 선택")
             .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
                 checked[which] = isChecked
@@ -822,7 +822,7 @@ class PdfEditorActivity : AppCompatActivity() {
     }
 
     private fun showFileInfo() {
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("파일 정보")
             .setMessage(
                 "이름: ${file.name}\n" +
@@ -835,7 +835,7 @@ class PdfEditorActivity : AppCompatActivity() {
     }
 
     private fun saveDocument() {
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("저장")
             .setMessage("저장 방식을 선택하세요")
             .setPositiveButton("원본 덮어쓰기") { _, _ ->
@@ -854,7 +854,7 @@ class PdfEditorActivity : AppCompatActivity() {
                 val input = makeStyledEditText("새 파일명").apply {
                     setText("${file.nameWithoutExtension}_edited.pdf")
                 }
-                AlertDialog.Builder(this)
+                AlertDialog.Builder(this, R.style.DarkDialogTheme)
                     .setTitle("새 파일명")
                     .setView(input)
                     .setPositiveButton("저장") { _, _ ->
@@ -881,7 +881,7 @@ class PdfEditorActivity : AppCompatActivity() {
     }
 
     private fun confirmExit() {
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("종료")
             .setMessage("저장하지 않은 변경사항은 사라집니다.\n종료할까요?")
             .setPositiveButton("종료") { _, _ -> finish() }
@@ -944,7 +944,7 @@ class PdfEditorActivity : AppCompatActivity() {
             addView(input)
         }
 
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("텍스트 편집")
             .setView(container)
             .setPositiveButton("저장") { _, _ ->
@@ -1075,7 +1075,7 @@ class PdfEditorActivity : AppCompatActivity() {
             addView(sizeInput)
         }
 
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("➕ 새 텍스트 추가")
             .setView(container)
             .setPositiveButton("추가") { _, _ ->

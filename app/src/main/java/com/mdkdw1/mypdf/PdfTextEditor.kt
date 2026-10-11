@@ -69,6 +69,10 @@ object PdfTextEditor {
     ): Result<File> = withContext(Dispatchers.IO) {
         try {
             PdfTextPicker.ensureInit(context)
+            CrashLogger.log(context, "PdfTextEditor",
+                "replaceText: pos=(${"%.1f".format(originalLeft)}, ${"%.1f".format(originalBottom)}) " +
+                "size=(${"%.1f".format(originalWidth)}x${"%.1f".format(originalHeight)}) " +
+                "text='${newText.take(20)}'")
             PDDocument.load(file).use { doc ->
                 val page = doc.getPage(pageIndex)
                 PDPageContentStream(
