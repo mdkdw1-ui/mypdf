@@ -211,8 +211,8 @@ object PdfTextEditor {
         val drawW = (bmpW / scale).coerceAtLeast(4f)
         val drawH = (bmpH / scale).coerceAtLeast(4f)
 
-        // 좌표: y는 텍스트의 baseline
-        val drawY = y - drawH * 0.2f
+        // ⭐ y는 좌하단 기준 baseline → 이미지의 bottom이 y가 되게
+        val drawY = y
         cs.drawImage(pdImage, x, drawY, drawW, drawH)
 
         // Bitmap 정리

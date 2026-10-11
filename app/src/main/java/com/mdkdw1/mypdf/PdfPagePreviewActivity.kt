@@ -161,17 +161,24 @@ class PdfPagePreviewActivity : AppCompatActivity() {
     }
 
     private fun handleTap(xRatio: Float, yRatio: Float) {
-        // 이미지 픽셀 좌표
         val bmp = pageBitmap ?: return
-        val imgX = xRatio * bmp.width
-        val imgY = yRatio * bmp.height
+
+        // ⭐ PhotoView OnPhotoTapListener: x, y는 0~1 (이미지 내부 상대좌표)
+        // PhotoView가 FIT_CENTER로 표시하고, 이미지와 뷰가 같으면 그대로 유효
+        // 하지만 뷰와 이미지 비율이 다르면 여백 발생 → PhotoView는 이미지 내부 좌표만 반환
 
         // PDF pt 좌표 (좌하단 기준)
         val pdfX = xRatio * pageWidthPt
         val pdfY = (1f - yRatio) * pageHeightPt
 
+        // 디버그 로그
+        CrashLogger.log(this, "PdfPagePreview",
+            "탭: ratio=(${"%.3f".format(xRatio)}, ${"%.3f".format(yRatio)}) " +
+            "→ pdf=(${"%.1f".format(pdfX)}, ${"%.1f".format(pdfY)}) " +
+            "(page=${pageWidthPt}x${pageHeightPt}, bitmap=${bmp.width}x${bmp.height})")
+
         when (mode) {
-            MODE_ADD_TEXT -> showAddTextDialog(pdfX, pdfY, imgX, imgY)
+            MODE_ADD_TEXT -> showAddTextDialog(pdfX, pdfY, 0f, 0f)
             MODE_HIGHLIGHT -> performHighlight(pdfX, pdfY)
             MODE_STICKY -> showStickyDialog(pdfX, pdfY)
             MODE_RECTANGLE -> showRectangleDialog(pdfX, pdfY)
