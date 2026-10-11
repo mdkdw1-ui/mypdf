@@ -78,7 +78,7 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
         AndroidView(
             factory = { ctx ->
                 val view = LayoutInflater.from(ctx)
-                    .inflate(R.layout.view_pdf, null, false) as PDFView
+                    .inflate(com.mdkdw1.mypdf.R.layout.view_pdf, null, false) as PDFView
                 view.fromFile(file)
                     .enableSwipe(true)
                     .swipeHorizontal(isHorizontal)

@@ -188,7 +188,7 @@ class FilePickerActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
             )
             setDivider(android.graphics.drawable.ColorDrawable(divider))
-            dividerHeight = 1
+            setDividerHeight(1)
             setBackgroundColor(bgColor)
             setPadding(0, 8, 0, 8)
             clipToPadding = false
