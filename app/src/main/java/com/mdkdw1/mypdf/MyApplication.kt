@@ -16,13 +16,13 @@ class MyApplication : Application() {
                 CrashLogger.logCrash(this, throwable)
 
                 // 크래시 화면 표시
-                val intent = Intent(this, CrashActivity::class.java).apply {
+                val crashIntent = Intent(this, CrashActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                    putExtra("stack", CrashLogger.readCrash(this))
+                    putExtra("stack", CrashLogger.readCrash(this@MyApplication))
                 }
-                startActivity(intent)
+                startActivity(crashIntent)
             } catch (e: Exception) {
-                // 저장 실패 시 기본 처리
+                // 저장 실패 시 무시
             }
             defaultHandler?.uncaughtException(thread, throwable)
         }

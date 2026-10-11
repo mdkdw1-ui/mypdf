@@ -9,13 +9,7 @@ class LogActivity : AppCompatActivity() {
 
     private lateinit var scrollView: ScrollView
     private lateinit var tvLog: TextView
-    private lateinit var btnApp: Button
-    private lateinit var btnCrash: Button
-    private lateinit var btnShare: Button
-    private lateinit var btnClear: Button
-    private lateinit var btnClose: Button
-
-    private var currentMode = "app"  // "app" or "crash"
+    private var currentMode = "app"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -25,17 +19,16 @@ class LogActivity : AppCompatActivity() {
             setPadding(16, 16, 16, 16)
         }
 
-        // 상단 버튼 바
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, 0, 0, 8)
         }
 
-        btnApp = Button(this).apply { text = "앱 로그" }
-        btnCrash = Button(this).apply { text = "크래시" }
-        btnShare = Button(this).apply { text = "공유" }
-        btnClear = Button(this).apply { text = "지우기" }
-        btnClose = Button(this).apply { text = "닫기" }
+        val btnApp = Button(this).apply { text = "앱" }
+        val btnCrash = Button(this).apply { text = "크래시" }
+        val btnShare = Button(this).apply { text = "공유" }
+        val btnClear = Button(this).apply { text = "지우기" }
+        val btnClose = Button(this).apply { text = "닫기" }
 
         topBar.addView(btnApp)
         topBar.addView(btnCrash)
@@ -43,7 +36,6 @@ class LogActivity : AppCompatActivity() {
         topBar.addView(btnClear)
         topBar.addView(btnClose)
 
-        // 로그 표시
         scrollView = ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
@@ -73,29 +65,32 @@ class LogActivity : AppCompatActivity() {
             loadLog()
         }
         btnShare.setOnClickListener {
-            val log = if (currentMode == "app") CrashLogger.readLog(this)
-                      else CrashLogger.readCrash(this)
-            val intent = Intent(Intent.ACTION_SEND).apply {
+            val log = if (currentMode == "app")
+                CrashLogger.readLog(this@LogActivity)
+            else
+                CrashLogger.readCrash(this@LogActivity)
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_SUBJECT, "MyPDF 로그")
                 putExtra(Intent.EXTRA_TEXT, log)
             }
-            startActivity(Intent.createChooser(intent, "로그 공유"))
+            startActivity(Intent.createChooser(shareIntent, "로그 공유"))
         }
         btnClear.setOnClickListener {
-            if (currentMode == "app") CrashLogger.clearLog(this)
-            else CrashLogger.clearCrash(this)
+            if (currentMode == "app") CrashLogger.clearLog(this@LogActivity)
+            else CrashLogger.clearCrash(this@LogActivity)
             loadLog()
-            Toast.makeText(this, "지워짐", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this@LogActivity, "지워짐", Toast.LENGTH_SHORT).show()
         }
         btnClose.setOnClickListener { finish() }
     }
 
     private fun loadLog() {
-        val log = if (currentMode == "app") CrashLogger.readLog(this)
-                  else CrashLogger.readCrash(this)
+        val log = if (currentMode == "app")
+            CrashLogger.readLog(this)
+        else
+            CrashLogger.readCrash(this)
         tvLog.text = log
-        // 자동 스크롤 맨 아래
         scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
     }
 }
