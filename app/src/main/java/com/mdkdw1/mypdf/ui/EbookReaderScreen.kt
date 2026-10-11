@@ -4,6 +4,7 @@ import android.graphics.Color as AndroidColor
 import android.view.LayoutInflater
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +27,7 @@ import com.mdkdw1.mypdf.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+import com.mdkdw1.mypdf.GroqTranslator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,6 +98,17 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
                         prefs.savePage(file.name, page)
                     }
                     .load()
+                // PDF 롱프레스 → 텍스트 선택 모드 안내
+                view.setOnLongClickListener {
+                    // PdfBox로 현재 페이지의 텍스트 중 첫 번째 단어 추출은 무거우니
+                    // 사용자가 "번역" 버튼을 누르도록 안내
+                    android.widget.Toast.makeText(
+                        context,
+                        "번역 아이콘(🌐)을 눌러 텍스트를 입력하세요",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    true
+                }
                 pdfViewRef = view
                 view
             },

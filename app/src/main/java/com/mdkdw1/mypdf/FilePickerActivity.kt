@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import android.view.View
+import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -19,10 +20,15 @@ class FilePickerActivity : AppCompatActivity() {
     private lateinit var listView: ListView
     private lateinit var tvPath: TextView
     private lateinit var tvEmpty: TextView
+    private lateinit var tvSummary: TextView
     private lateinit var btnUp: Button
     private lateinit var btnClose: Button
+    private lateinit var etSearch: EditText
 
     private var currentDir: File = File("/storage/emulated/0")
+    private var allItems: MutableList<Triple<File, String, String>> = mutableListOf()
+    private var filteredItems: MutableList<Triple<File, String, String>> = mutableListOf()
+    private var searchQuery: String = ""
 
     private val blockedNames = setOf(
         "Android", "android", "data", "obb",
@@ -47,27 +53,104 @@ class FilePickerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_file_picker)
 
-        listView = findViewById(R.id.listFiles)
-        tvPath = findViewById(R.id.tvPath)
-        tvEmpty = findViewById(R.id.tvEmpty)
-        btnUp = findViewById(R.id.btnUp)
-        btnClose = findViewById(R.id.btnClose)
-
-        btnClose.setOnClickListener { finish() }
-        btnUp.setOnClickListener {
-            val parent = currentDir.parentFile
-            if (parent != null && parent.canRead() &&
-                currentDir.absolutePath != "/storage/emulated/0") {
-                currentDir = parent
-                loadDir()
-            } else {
-                Toast.makeText(this, "최상위 폴더입니다", Toast.LENGTH_SHORT).show()
-            }
+        // ── 프로그래매틱 UI ──
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
         }
 
-        if (!checkStoragePermission()) requestStoragePermission() else loadDir()
+        // 상단 바
+        val topBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(12, 12, 12, 12)
+            setBackgroundColor(0xFFF5F5F5.toInt())
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+
+        btnClose = Button(this).apply {
+            text = "✕"
+            minWidth = 100
+            setOnClickListener { finish() }
+        }
+        btnUp = Button(this).apply {
+            text = "↑"
+            minWidth = 100
+            setOnClickListener {
+                val parent = currentDir.parentFile
+                if (parent != null && parent.canRead() &&
+                    currentDir.absolutePath != "/storage/emulated/0") {
+                    currentDir = parent
+                    loadDir()
+                } else {
+                    Toast.makeText(this@FilePickerActivity, "최상위 폴더", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        tvPath = TextView(this).apply {
+            textSize = 12f
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.START
+            setPadding(12, 0, 12, 0)
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        topBar.addView(btnClose)
+        topBar.addView(btnUp)
+        topBar.addView(tvPath)
+        root.addView(topBar)
+
+        // 검색창
+        etSearch = EditText(this).apply {
+            hint = "현재 폴더에서 검색..."
+            singleLine = true
+            setPadding(24, 20, 24, 20)
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+                override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {
+                    searchQuery = s?.toString() ?: ""
+                    applyFilter()
+                }
+                override fun afterTextChanged(s: android.text.Editable?) {}
+            })
+        }
+        root.addView(etSearch)
+
+        // 요약 정보
+        tvSummary = TextView(this).apply {
+            textSize = 11f
+            setTextColor(0xFF888888.toInt())
+            setPadding(24, 8, 24, 8)
+        }
+        root.addView(tvSummary)
+
+        // 빈 상태
+        tvEmpty = TextView(this).apply {
+            text = "이 폴더에 PDF가 없습니다"
+            textSize = 14f
+            gravity = android.view.Gravity.CENTER
+            setPadding(24, 48, 24, 48)
+            visibility = View.GONE
+        }
+        root.addView(tvEmpty)
+
+        // 리스트
+        listView = ListView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+            )
+            divider = android.graphics.drawable.ColorDrawable(0xFFEEEEEE.toInt())
+            dividerHeight = 2
+        }
+        root.addView(listView)
+
+        setContentView(root)
+
+        // 권한 체크
+        if (!checkStoragePermission()) {
+            requestStoragePermission()
+        } else {
+            loadDir()
+        }
     }
 
     private fun checkStoragePermission(): Boolean {
@@ -125,32 +208,121 @@ class FilePickerActivity : AppCompatActivity() {
 
     private fun loadDir() {
         tvPath.text = currentDir.absolutePath
-        val allFiles = currentDir.listFiles()?.sortedBy { it.name.lowercase() } ?: emptyList()
+        etSearch.setText("")
 
-        val pdfFiles = allFiles.filter { it.isFile && it.extension.lowercase() == "pdf" }
-        val subFolders = allFiles.filter { it.isDirectory && !isBlocked(it.name) }
+        val files = currentDir.listFiles()?.sortedBy { it.name.lowercase() } ?: emptyList()
 
-        val display = mutableListOf<Pair<File, String>>()
+        val pdfFiles = files.filter { it.isFile && it.extension.lowercase() == "pdf" }
+        val subFolders = files.filter { it.isDirectory && !isBlocked(it.name) }
+
+        allItems = mutableListOf()
+
+        // 폴더 먼저 (PDF 있으면 🔴)
         subFolders.forEach { f ->
-            val prefix = if (hasPdfDirect(f)) "📁🔴" else "📁"
-            display.add(f to "$prefix ${f.name}")
+            val hasPdf = hasPdfDirect(f)
+            val icon = if (hasPdf) "📁🔴" else "📁"
+            val subCount = try { f.listFiles()?.size ?: 0 } catch (_: Exception) { 0 }
+            allItems.add(Triple(f, "$icon ${f.name}", "$subCount 항목"))
         }
-        pdfFiles.forEach { f -> display.add(f to "📄 ${f.name}") }
+        // PDF 파일 (크기 표시)
+        pdfFiles.forEach { f ->
+            val mb = "%.1f MB".format(f.length() / 1024.0 / 1024.0)
+            allItems.add(Triple(f, "📄 ${f.name}", mb))
+        }
 
-        if (display.isEmpty()) {
+        filteredItems = allItems.toMutableList()
+        updateSummary()
+        refreshList()
+    }
+
+    private fun applyFilter() {
+        filteredItems = if (searchQuery.isBlank()) {
+            allItems.toMutableList()
+        } else {
+            allItems.filter {
+                it.first.name.contains(searchQuery, ignoreCase = true)
+            }.toMutableList()
+        }
+        updateSummary()
+        refreshList()
+    }
+
+    private fun updateSummary() {
+        val folders = filteredItems.count { it.first.isDirectory }
+        val pdfs = filteredItems.count { it.first.isFile }
+        tvSummary.text = "폴더 $folders · PDF $pdfs"
+    }
+
+    private fun refreshList() {
+        if (filteredItems.isEmpty()) {
             listView.visibility = View.GONE
             tvEmpty.visibility = View.VISIBLE
-            tvEmpty.text = "이 폴더에 PDF가 없습니다"
+            tvEmpty.text = if (searchQuery.isNotBlank()) "검색 결과 없음"
+                           else "이 폴더에 PDF나 하위 폴더가 없습니다"
             return
         }
-
         listView.visibility = View.VISIBLE
         tvEmpty.visibility = View.GONE
-        listView.adapter = ArrayAdapter(
-            this, android.R.layout.simple_list_item_1, display.map { it.second }
-        )
+
+        listView.adapter = object : BaseAdapter() {
+            override fun getCount() = filteredItems.size
+            override fun getItem(position: Int) = filteredItems[position]
+            override fun getItemId(position: Int) = position.toLong()
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+                val ctx = this@FilePickerActivity
+                val v = convertView ?: LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    setPadding(32, 28, 32, 28)
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                }
+                (v as LinearLayout).removeAllViews()
+
+                val (file, title, sub) = filteredItems[position]
+
+                // 아이콘 (별도 TextView, 큰 글씨)
+                val iconView = TextView(ctx).apply {
+                    val iconText = if (file.isDirectory) {
+                        if (title.startsWith("📁🔴")) "📁" else "📁"
+                    } else "📄"
+                    text = iconText
+                    textSize = 28f
+                    setPadding(0, 0, 24, 0)
+                }
+
+                // 정보 (제목 + 부제)
+                val infoLayout = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                }
+
+                val cleanTitle = title.removePrefix("📁🔴 ").removePrefix("📁 ").removePrefix("📄 ")
+
+                val titleView = TextView(ctx).apply {
+                    text = cleanTitle
+                    textSize = 15f
+                    setTextColor(if (file.isDirectory) 0xFF1A1A1A.toInt() else 0xFF333333.toInt())
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+                }
+
+                val subView = TextView(ctx).apply {
+                    text = if (file.isDirectory && title.startsWith("📁🔴")) "🔴 $sub" else sub
+                    textSize = 11f
+                    setTextColor(if (title.startsWith("📁🔴")) 0xFFE91E63.toInt() else 0xFF888888.toInt())
+                }
+
+                infoLayout.addView(titleView)
+                infoLayout.addView(subView)
+
+                v.addView(iconView)
+                v.addView(infoLayout)
+
+                return v
+            }
+        }
+
         listView.setOnItemClickListener { _, _, pos, _ ->
-            val (file, _) = display[pos]
+            val (file, _, _) = filteredItems[pos]
             if (file.isDirectory) {
                 currentDir = file
                 loadDir()
