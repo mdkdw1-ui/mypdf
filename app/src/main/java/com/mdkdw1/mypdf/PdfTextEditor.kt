@@ -202,6 +202,9 @@ object PdfTextEditor {
      * - ASCII: 원본 폰트 그대로
      * - 한글: Bitmap 렌더링 (원본 크기/위치 유지)
      */
+    /**
+     * ⭐ 여러 텍스트를 한 번에 교체 (원본 폰트/위치/크기 최대한 유지)
+     */
     suspend fun replaceMultiple(
         context: Context,
         file: File,
@@ -213,6 +216,29 @@ object PdfTextEditor {
             PDDocument.load(file).use { doc ->
                 val page = doc.getPage(pageIndex)
 
+                // ⭐ 페이지에서 사용 가능한 모든 폰트 수집
+                val availableFonts = mutableMapOf<String, PDFont>()
+                try {
+                    val resources = page.resources
+                    if (resources != null) {
+                        for (fontName in resources.fontNames) {
+                            try {
+                                val f = resources.getFont(fontName)
+                                if (f != null) {
+                                    availableFonts[fontName] = f
+                                    f.name?.let { availableFonts[it] = f }
+                                }
+                            } catch (_: Exception) {}
+                        }
+                    }
+                } catch (e: Exception) {
+                    CrashLogger.log(context, "PdfTextEditor",
+                        "폰트 수집 실패: ${e.message}")
+                }
+
+                CrashLogger.log(context, "PdfTextEditor",
+                    "페이지 폰트 ${availableFonts.size}개: ${availableFonts.keys.take(5)}")
+
                 // 한글 폰트 (assets에 있으면)
                 val koreanFont: PDFont? = try {
                     PDType0Font.load(
@@ -220,11 +246,7 @@ object PdfTextEditor {
                         context.assets.open("fonts/NotoSansKR-Regular.otf"),
                         true
                     )
-                } catch (e: Exception) {
-                    CrashLogger.log(context, "PdfTextEditor",
-                        "한글 폰트 없음 → Bitmap 렌더링 사용")
-                    null
-                }
+                } catch (e: Exception) { null }
 
                 PDPageContentStream(
                     doc, page, PDPageContentStream.AppendMode.APPEND, true, true
@@ -232,51 +254,61 @@ object PdfTextEditor {
                     for ((_, pair) in edits) {
                         val (word, newText) = pair
 
-                        // ⭐ Y 좌표: word.y는 baseline (좌하단 기준)
                         val baselineY = word.y
 
                         // 1) 원본 텍스트 완전 덮기
-                        val coverLeft = word.x - 2f
-                        val coverBottom = baselineY - word.height * 0.4f
-                        val coverW = word.width + 4f
-                        val coverH = word.height * 1.8f
-
                         cs.setNonStrokingColor(255, 255, 255)
-                        cs.addRect(coverLeft, coverBottom, coverW, coverH)
+                        cs.addRect(
+                            word.x - 2f,
+                            baselineY - word.height * 0.4f,
+                            word.width + 4f,
+                            word.height * 1.8f
+                        )
                         cs.fill()
 
                         // 2) 새 텍스트
                         val hasKorean = newText.any { it.code > 127 }
 
                         if (hasKorean && koreanFont == null) {
-                            // ⭐ 한글 + 폰트 없음 → Bitmap 렌더링
-                            drawTextAsBitmap(
-                                doc, cs,
-                                newText,
-                                word.fontSize,
-                                Color.BLACK,
-                                word.x,
-                                baselineY,
-                                word.height
-                            )
+                            // 한글 + 폰트 없음 → Bitmap
+                            drawTextAsBitmap(doc, cs, newText, word.fontSize,
+                                Color.BLACK, word.x, baselineY, word.height)
                             CrashLogger.log(context, "PdfTextEditor",
-                                "교체(Bitmap): '${word.text}' → '$newText' " +
-                                "pos=(${"%.1f".format(word.x)}, ${"%.1f".format(baselineY)}) " +
-                                "font=${"%.1f".format(word.fontSize)}pt")
+                                "교체(Bitmap): '${word.text}' → '$newText'")
                         } else {
-                            // ASCII 또는 한글 폰트 있음
-                            val font = if (hasKorean && koreanFont != null)
-                                           koreanFont
-                                       else PDType1Font.HELVETICA
-                            cs.setNonStrokingColor(0, 0, 0)
-                            cs.beginText()
-                            cs.setFont(font, word.fontSize.coerceIn(6f, 72f))
-                            cs.newLineAtOffset(word.x, baselineY)
-                            cs.showText(newText.take(200))
-                            cs.endText()
-                            CrashLogger.log(context, "PdfTextEditor",
-                                "교체(Font): '${word.text}' → '$newText' " +
-                                "pos=(${"%.1f".format(word.x)}, ${"%.1f".format(baselineY)})")
+                            // ⭐ 원본 폰트 찾기
+                            val originalFont: PDFont? = when {
+                                hasKorean && koreanFont != null -> koreanFont
+                                else -> {
+                                    // 1) 이름 그대로 매칭
+                                    availableFonts[word.fontName]
+                                    // 2) 부분 매칭 (예: "DotumChe" in "DotumChe_PDF_Subset")
+                                    ?: availableFonts.entries.find {
+                                        word.fontName.contains(it.key) ||
+                                        it.key.contains(word.fontName)
+                                    }?.value
+                                    // 3) 실패 시 Helvetica
+                                    ?: PDType1Font.HELVETICA
+                                }
+                            }
+
+                            try {
+                                cs.setNonStrokingColor(0, 0, 0)
+                                cs.beginText()
+                                cs.setFont(originalFont, word.fontSize.coerceIn(6f, 72f))
+                                cs.newLineAtOffset(word.x, baselineY)
+                                cs.showText(newText.take(200))
+                                cs.endText()
+                                CrashLogger.log(context, "PdfTextEditor",
+                                    "교체(Font '${originalFont.name}'): " +
+                                    "'${word.text}' → '$newText' (was ${word.fontName})")
+                            } catch (e: Exception) {
+                                // 원본 폰트로 실패 → Bitmap 폴백
+                                CrashLogger.e(context, "PdfTextEditor",
+                                    "원본 폰트 실패 → Bitmap", e)
+                                drawTextAsBitmap(doc, cs, newText, word.fontSize,
+                                    Color.BLACK, word.x, baselineY, word.height)
+                            }
                         }
                     }
                 }

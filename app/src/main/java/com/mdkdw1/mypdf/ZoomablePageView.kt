@@ -3,14 +3,19 @@ package com.mdkdw1.mypdf
 import android.content.Context
 import android.graphics.Matrix
 import android.graphics.PointF
+import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import androidx.appcompat.widget.AppCompatImageView
+import kotlin.math.abs
 import kotlin.math.min
 
+/**
+ * ⭐ 완벽한 핀치/팬/탭 (표준 Android 패턴)
+ */
 class ZoomablePageView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -18,28 +23,37 @@ class ZoomablePageView @JvmOverloads constructor(
 ) : AppCompatImageView(context, attrs, defStyle) {
 
     private val matrix = Matrix()
+    private val savedMatrix = Matrix()
+    private val imageRect = RectF()     // 현재 이미지 위치
+
     private var minScale = 1f
     private var maxScale = 8f
 
     private var mode = NONE
     private val startPoint = PointF()
-    private val savedMatrix = Matrix()
+    private val lastTouch = PointF()
 
     var onTapListener: ((Float, Float) -> Unit)? = null
 
+    // ⭐ 핀치 줌 (focal point 정확)
     private val scaleDetector = ScaleGestureDetector(context,
         object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
+                mode = ZOOM
+                return true
+            }
             override fun onScale(detector: ScaleGestureDetector): Boolean {
                 val factor = detector.scaleFactor
                 val values = FloatArray(9)
                 matrix.getValues(values)
                 val currentScale = values[Matrix.MSCALE_X]
                 val newScale = currentScale * factor
-                if (newScale < minScale * 0.5f || newScale > maxScale) return true
 
-                // ⭐ 핵심: focusX, focusY (두 손가락 중심)
-                matrix.postScale(factor, factor, detector.focusX, detector.focusY)
-                imageMatrix = matrix
+                if (newScale in minScale..maxScale) {
+                    // ⭐ 손가락 중심(focus)으로 확대
+                    matrix.postScale(factor, factor, detector.focusX, detector.focusY)
+                    imageMatrix = matrix
+                }
                 return true
             }
         })
@@ -55,10 +69,8 @@ class ZoomablePageView @JvmOverloads constructor(
                 matrix.getValues(values)
                 val cur = values[Matrix.MSCALE_X]
                 if (cur > minScale * 1.2f) {
-                    // 원복
                     fitImageToView()
                 } else {
-                    // 2배 확대 (탭 위치 중심)
                     matrix.postScale(2f, 2f, e.x, e.y)
                     imageMatrix = matrix
                 }
@@ -70,21 +82,14 @@ class ZoomablePageView @JvmOverloads constructor(
         scaleType = ScaleType.MATRIX
     }
 
-    // ⭐ layout 완료 시 matrix 초기화 (가장 확실)
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        if (w > 0 && h > 0) {
-            fitImageToView()
-        }
+        if (w > 0 && h > 0) fitImageToView()
     }
 
     override fun setImageDrawable(drawable: Drawable?) {
         super.setImageDrawable(drawable)
-        // layout 이미 됐으면 바로 fit
-        if (width > 0 && height > 0) {
-            fitImageToView()
-        }
-        // layout 대기는 onSizeChanged가 처리
+        if (width > 0 && height > 0) fitImageToView()
     }
 
     private fun fitImageToView() {
@@ -106,6 +111,7 @@ class ZoomablePageView @JvmOverloads constructor(
         matrix.postScale(scale, scale)
         matrix.postTranslate(dx, dy)
         imageMatrix = matrix
+        updateImageRect()
 
         android.util.Log.d("ZoomablePageView",
             "fit: d=${dW.toInt()}x${dH.toInt()} v=${vW.toInt()}x${vH.toInt()} scale=$scale")
@@ -119,28 +125,61 @@ class ZoomablePageView @JvmOverloads constructor(
             MotionEvent.ACTION_DOWN -> {
                 savedMatrix.set(matrix)
                 startPoint.set(event.x, event.y)
+                lastTouch.set(event.x, event.y)
                 mode = DRAG
             }
+
             MotionEvent.ACTION_POINTER_DOWN -> {
+                // 두 손가락 시작 → ZOOM
                 mode = ZOOM
             }
+
             MotionEvent.ACTION_MOVE -> {
                 if (mode == DRAG && event.pointerCount == 1) {
+                    // ⭐ 한 손가락 팬
                     matrix.set(savedMatrix)
                     matrix.postTranslate(
                         event.x - startPoint.x,
                         event.y - startPoint.y
                     )
                     imageMatrix = matrix
+                    updateImageRect()
+                }
+                lastTouch.set(event.x, event.y)
+            }
+
+            MotionEvent.ACTION_POINTER_UP -> {
+                // ⭐ 한 손가락이 떼짐 → 남은 손가락으로 DRAG 재시작
+                if (event.pointerCount >= 2) {
+                    val remainIdx = if (event.actionIndex == 0) 1 else 0
+                    startPoint.set(event.getX(remainIdx), event.getY(remainIdx))
+                    savedMatrix.set(matrix)
+                    mode = DRAG
                 }
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 mode = NONE
+                updateImageRect()
             }
         }
         return true
     }
 
+    private fun updateImageRect() {
+        val d = drawable ?: return
+        val values = FloatArray(9)
+        matrix.getValues(values)
+        val left = values[Matrix.MTRANS_X]
+        val top = values[Matrix.MTRANS_Y]
+        val right = left + d.intrinsicWidth * values[Matrix.MSCALE_X]
+        val bottom = top + d.intrinsicHeight * values[Matrix.MSCALE_Y]
+        imageRect.set(left, top, right, bottom)
+    }
+
+    /**
+     * 뷰 좌표 → 이미지 내부 좌표 (탭 위치 계산)
+     */
     fun viewToImage(viewX: Float, viewY: Float): PointF {
         val inv = Matrix()
         if (!matrix.invert(inv)) return PointF(viewX, viewY)
