@@ -44,6 +44,13 @@ class PdfViewerActivity : AppCompatActivity() {
     private var currentPage = 0
     private var selectionMode = false
 
+    // ⭐ 툴바 자동 숨김
+    private lateinit var toolbarRef: LinearLayout
+    private lateinit var bottomBarRef: LinearLayout
+    private val autoHideHandler = Handler(Looper.getMainLooper())
+    private var autoHideRunnable: Runnable? = null
+    private val autoHideDelay = 3000L  // 3초
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -207,6 +214,11 @@ class PdfViewerActivity : AppCompatActivity() {
 
         setContentView(root)
 
+        // ⭐ 툴바 참조 저장 + 초기 3초 후 숨김 시작
+        toolbarRef = toolbar
+        bottomBarRef = bottomBar
+        scheduleAutoHide()
+
         // ⭐ 롱프레스 감지 (RecyclerView OnItemTouchListener)
         setupLongPress(pages)
 
@@ -251,6 +263,7 @@ class PdfViewerActivity : AppCompatActivity() {
         var runnable: Runnable? = null
         var downX = 0f
         var downY = 0f
+        var downTime = 0L
         var downChild: View? = null
         var downChildX = 0f
         var downChildY = 0f
@@ -261,6 +274,7 @@ class PdfViewerActivity : AppCompatActivity() {
                     MotionEvent.ACTION_DOWN -> {
                         downX = e.x
                         downY = e.y
+                        downTime = System.currentTimeMillis()
                         downChild = rv.findChildViewUnder(e.x, e.y)
                         downChild?.let { child ->
                             downChildX = e.x - child.left
@@ -299,7 +313,21 @@ class PdfViewerActivity : AppCompatActivity() {
                             runnable = null
                         }
                     }
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    MotionEvent.ACTION_UP -> {
+                        runnable?.let { handler.removeCallbacks(it) }
+                        runnable = null
+
+                        // ⭐ 탭 감지 (짧게 누르고 이동 없음)
+                        val duration = System.currentTimeMillis() - downTime
+                        val dx = kotlin.math.abs(e.x - downX)
+                        val dy = kotlin.math.abs(e.y - downY)
+
+                        if (duration < 300 && dx < 20f && dy < 20f) {
+                            // 짧은 탭 → 화면 위/아래 영역이면 툴바 표시
+                            handleEdgeTap(e.y, rv.height)
+                        }
+                    }
+                    MotionEvent.ACTION_CANCEL -> {
                         runnable?.let { handler.removeCallbacks(it) }
                         runnable = null
                     }
@@ -416,7 +444,56 @@ class PdfViewerActivity : AppCompatActivity() {
             .show()
     }
 
+    /**
+     * ⭐ 툴바 자동 숨김 예약 (3초)
+     */
+    private fun scheduleAutoHide() {
+        autoHideRunnable?.let { autoHideHandler.removeCallbacks(it) }
+        autoHideRunnable = Runnable {
+            hideToolbars()
+        }
+        autoHideHandler.postDelayed(autoHideRunnable!!, autoHideDelay)
+    }
+
+    /**
+     * ⭐ 툴바 표시 + 3초 후 자동 숨김
+     */
+    private fun showToolbars() {
+        toolbarRef.visibility = View.VISIBLE
+        bottomBarRef.visibility = View.VISIBLE
+        scheduleAutoHide()
+    }
+
+    /**
+     * ⭐ 툴바 숨김
+     */
+    private fun hideToolbars() {
+        toolbarRef.visibility = View.GONE
+        bottomBarRef.visibility = View.GONE
+        autoHideRunnable?.let { autoHideHandler.removeCallbacks(it) }
+        autoHideRunnable = null
+    }
+
+    /**
+     * ⭐ 상단 15% 또는 하단 15% 탭 시 툴바 표시
+     */
+    private fun handleEdgeTap(y: Float, viewHeight: Int) {
+        val topThreshold = viewHeight * 0.15f
+        val bottomThreshold = viewHeight * 0.85f
+
+        if (y < topThreshold || y > bottomThreshold) {
+            // 위/아래 영역 탭 → 툴바 표시
+            if (toolbarRef.visibility != View.VISIBLE) {
+                showToolbars()
+            } else {
+                // 이미 보이면 3초 리셋
+                scheduleAutoHide()
+            }
+        }
+    }
+
     override fun onDestroy() {
+        autoHideRunnable?.let { autoHideHandler.removeCallbacks(it) }
         try { pdfRenderer.close() } catch (_: Exception) {}
         try { pfd.close() } catch (_: Exception) {}
         super.onDestroy()
