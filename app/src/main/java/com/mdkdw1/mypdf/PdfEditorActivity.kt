@@ -255,6 +255,8 @@ class PdfEditorActivity : AppCompatActivity() {
         if (currentPos < 0) return
 
         val options = arrayOf(
+            "✏️ 텍스트 편집 (기존 수정)",
+            "➕ 텍스트 추가 (새로 쓰기)",
             "🔄 오른쪽 90° 회전",
             "🔄 왼쪽 90° 회전",
             "🖍 하이라이트 (좌상단)",
@@ -269,14 +271,16 @@ class PdfEditorActivity : AppCompatActivity() {
             .setTitle("페이지 ${currentPos + 1}")
             .setItems(options) { _, which ->
                 when (which) {
-                    0 -> rotatePage(originalIndex, 90)
-                    1 -> rotatePage(originalIndex, -90)
-                    2 -> addHighlight(originalIndex)
-                    3 -> addStickyNote(originalIndex)
-                    4 -> addRectangle(originalIndex)
-                    5 -> addCircle(originalIndex)
-                    6 -> confirmDeletePage(originalIndex)
-                    7 -> extractPage(originalIndex)
+                    0 -> showTextEditDialog(originalIndex)
+                    1 -> showAddTextDialog(originalIndex)
+                    2 -> rotatePage(originalIndex, 90)
+                    3 -> rotatePage(originalIndex, -90)
+                    4 -> addHighlight(originalIndex)
+                    5 -> addStickyNote(originalIndex)
+                    6 -> addRectangle(originalIndex)
+                    7 -> addCircle(originalIndex)
+                    8 -> confirmDeletePage(originalIndex)
+                    9 -> extractPage(originalIndex)
                 }
             }
             .setNegativeButton("취소", null)
@@ -680,6 +684,219 @@ class PdfEditorActivity : AppCompatActivity() {
             .setTitle("종료")
             .setMessage("저장하지 않은 변경사항은 사라집니다.\n종료할까요?")
             .setPositiveButton("종료") { _, _ -> finish() }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
+    /**
+     * ⭐ 기존 텍스트 편집 (페이지 텍스트 목록 → 선택 → 수정)
+     */
+    private fun showTextEditDialog(originalIndex: Int) {
+        lifecycleScope.launch {
+            Toast.makeText(this@PdfEditorActivity, "텍스트 추출 중...", Toast.LENGTH_SHORT).show()
+
+            val result = withContext(Dispatchers.IO) {
+                PdfTextPicker.extractWordsWithSize(this@PdfEditorActivity, file, originalIndex)
+            }.getOrNull()
+
+            if (result == null || result.words.isEmpty()) {
+                Toast.makeText(this@PdfEditorActivity,
+                    "❌ 텍스트 없음 (스캔본?)", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+
+            // 텍스트 리스트 다이얼로그
+            val labels = result.words.map { it.text }.toTypedArray()
+            AlertDialog.Builder(this@PdfEditorActivity)
+                .setTitle("수정할 텍스트 선택 (${result.words.size}개)")
+                .setItems(labels) { _, which ->
+                    val word = result.words[which]
+                    showEditTextInput(originalIndex, word)
+                }
+                .setNegativeButton("취소", null)
+                .show()
+        }
+    }
+
+    /**
+     * ⭐ 텍스트 수정 입력 다이얼로그
+     */
+    private fun showEditTextInput(originalIndex: Int, word: PdfTextPicker.Word) {
+        val input = EditText(this).apply {
+            setText(word.text)
+            setSelection(word.text.length)
+            hint = "새 텍스트"
+        }
+
+        val label = TextView(this).apply {
+            text = "원본: ${word.text}\n" +
+                   "위치: (${"%.1f".format(word.x)}, ${"%.1f".format(word.y)})\n" +
+                   "폰트: ${"%.1f".format(word.fontSize)}pt"
+            setTextColor(0xFF666666.toInt())
+            textSize = 11f
+            setPadding(0, 0, 0, 16)
+        }
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 16, 24, 16)
+            addView(label)
+            addView(input)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("텍스트 편집")
+            .setView(container)
+            .setPositiveButton("저장") { _, _ ->
+                val newText = input.text.toString()
+                if (newText.isBlank()) {
+                    Toast.makeText(this, "텍스트를 입력하세요", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                performTextReplace(originalIndex, word, newText)
+            }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
+    /**
+     * ⭐ 텍스트 교체 실행
+     */
+    private fun performTextReplace(
+        originalIndex: Int,
+        word: PdfTextPicker.Word,
+        newText: String
+    ) {
+        lifecycleScope.launch {
+            Toast.makeText(this@PdfEditorActivity, "저장 중...", Toast.LENGTH_SHORT).show()
+
+            PdfTextEditor.replaceText(
+                context = this@PdfEditorActivity,
+                file = file,
+                pageIndex = originalIndex,
+                originalLeft = word.x,
+                originalBottom = word.y,
+                originalWidth = word.width,
+                originalHeight = word.height,
+                newText = newText,
+                fontSize = word.fontSize,
+                color = Color.BLACK,
+                bgColor = Color.WHITE
+            ).fold(
+                onSuccess = {
+                    refreshThumb(originalIndex)
+                    Toast.makeText(this@PdfEditorActivity,
+                        "✅ 텍스트 저장됨", Toast.LENGTH_SHORT).show()
+                },
+                onFailure = {
+                    Toast.makeText(this@PdfEditorActivity,
+                        "❌ ${it.message}", Toast.LENGTH_LONG).show()
+                }
+            )
+        }
+    }
+
+    /**
+     * ⭐ 새 텍스트 추가 (좌표 지정)
+     */
+    private fun showAddTextDialog(originalIndex: Int) {
+        val input = EditText(this).apply {
+            hint = "새 텍스트 입력"
+            minLines = 2
+        }
+
+        val xInput = EditText(this).apply {
+            setText("100")
+            hint = "X (pt, 0~595)"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                    android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        }
+
+        val yInput = EditText(this).apply {
+            setText("400")
+            hint = "Y (pt, 0~842)"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                    android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        }
+
+        val sizeInput = EditText(this).apply {
+            setText("14")
+            hint = "폰트 크기 (pt)"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                    android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        }
+
+        val info = TextView(this).apply {
+            text = "페이지 ${originalIndex + 1}\n" +
+                   "PDF 좌표: 좌하단(0,0) → 우상단(595, 842)"
+            setTextColor(0xFF666666.toInt())
+            textSize = 11f
+            setPadding(0, 0, 0, 16)
+        }
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 16, 24, 16)
+            addView(info)
+            addView(input)
+            addView(TextView(this@PdfEditorActivity).apply {
+                text = "위치 X:"
+                setTextColor(0xFF888888.toInt())
+                textSize = 11f
+                setPadding(0, 12, 0, 4)
+            })
+            addView(xInput)
+            addView(TextView(this@PdfEditorActivity).apply {
+                text = "위치 Y (좌하단 기준):"
+                setTextColor(0xFF888888.toInt())
+                textSize = 11f
+                setPadding(0, 12, 0, 4)
+            })
+            addView(yInput)
+            addView(TextView(this@PdfEditorActivity).apply {
+                text = "폰트 크기:"
+                setTextColor(0xFF888888.toInt())
+                textSize = 11f
+                setPadding(0, 12, 0, 4)
+            })
+            addView(sizeInput)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("➕ 새 텍스트 추가")
+            .setView(container)
+            .setPositiveButton("추가") { _, _ ->
+                val text = input.text.toString().trim()
+                if (text.isBlank()) {
+                    Toast.makeText(this, "텍스트를 입력하세요", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                val x = xInput.text.toString().toFloatOrNull() ?: 100f
+                val y = yInput.text.toString().toFloatOrNull() ?: 400f
+                val fontSize = sizeInput.text.toString().toFloatOrNull() ?: 14f
+
+                lifecycleScope.launch {
+                    PdfTextEditor.addText(
+                        context = this@PdfEditorActivity,
+                        file = file,
+                        pageIndex = originalIndex,
+                        x = x, y = y,
+                        text = text,
+                        fontSize = fontSize,
+                        color = Color.BLACK
+                    ).fold(
+                        onSuccess = {
+                            refreshThumb(originalIndex)
+                            Toast.makeText(this@PdfEditorActivity,
+                                "✅ 텍스트 추가됨", Toast.LENGTH_SHORT).show()
+                        },
+                        onFailure = {
+                            Toast.makeText(this@PdfEditorActivity,
+                                "❌ ${it.message}", Toast.LENGTH_LONG).show()
+                        }
+                    )
+                }
+            }
             .setNegativeButton("취소", null)
             .show()
     }
