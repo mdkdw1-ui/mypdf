@@ -123,6 +123,8 @@ class ZoomablePageView @JvmOverloads constructor(
 
         when (event.action and MotionEvent.ACTION_MASK) {
             MotionEvent.ACTION_DOWN -> {
+                // ⭐ 부모가 터치 가로채지 못하게
+                parent?.requestDisallowInterceptTouchEvent(true)
                 savedMatrix.set(matrix)
                 startPoint.set(event.x, event.y)
                 lastTouch.set(event.x, event.y)
@@ -159,6 +161,7 @@ class ZoomablePageView @JvmOverloads constructor(
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                parent?.requestDisallowInterceptTouchEvent(false)
                 mode = NONE
                 updateImageRect()
             }

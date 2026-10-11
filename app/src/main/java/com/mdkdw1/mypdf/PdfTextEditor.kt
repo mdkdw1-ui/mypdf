@@ -215,6 +215,7 @@ object PdfTextEditor {
             PdfTextPicker.ensureInit(context)
             PDDocument.load(file).use { doc ->
                 val page = doc.getPage(pageIndex)
+                val pageHeightPt = page.mediaBox.height  // ⭐ Y 변환용
 
                 // ⭐ 페이지에서 사용 가능한 모든 폰트 수집
                 val availableFonts = mutableMapOf<String, PDFont>()
@@ -255,13 +256,15 @@ object PdfTextEditor {
                     for ((_, pair) in edits) {
                         val (word, newText) = pair
 
-                        val baselineY = word.y
+                        // ⭐ word.y는 top-origin (PdfTextPicker) → bottom-origin 변환
+                        val baselineY = pageHeightPt - word.y - word.height
+                        val coverTop = baselineY - word.height * 0.4f
 
                         // 1) 원본 텍스트 완전 덮기
                         cs.setNonStrokingColor(255, 255, 255)
                         cs.addRect(
                             word.x - 2f,
-                            baselineY - word.height * 0.4f,
+                            coverTop,
                             word.width + 4f,
                             word.height * 1.8f
                         )

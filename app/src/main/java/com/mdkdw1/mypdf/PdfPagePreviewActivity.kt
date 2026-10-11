@@ -134,7 +134,10 @@ class PdfPagePreviewActivity : AppCompatActivity() {
 
             val bmp = withContext(Dispatchers.IO) { renderPage(file, pageIndex, 2400) }
             if (bmp != null) {
-                zoomView.setImageBitmap(bmp)
+                // ⭐ layout 완료 후 이미지 설정 (fitImageToView 확실히 실행)
+                zoomView.post {
+                    zoomView.setImageBitmap(bmp)
+                }
             } else {
                 Toast.makeText(this@PdfPagePreviewActivity,
                     "페이지 렌더 실패", Toast.LENGTH_LONG).show()
