@@ -141,6 +141,7 @@ class PdfPagePreviewActivity : AppCompatActivity() {
             }
             if (bmp != null) {
                 pageBitmap = bmp
+                photoView.setZoomable(true)
                 photoView.setImageBitmap(bmp)
 
                 // PDF pt 크기 계산 (비율 기반)
@@ -179,13 +180,11 @@ class PdfPagePreviewActivity : AppCompatActivity() {
     }
 
     private fun showAddTextDialog(pdfX: Float, pdfY: Float, imgX: Float, imgY: Float) {
-        val input = EditText(this).apply {
-            hint = "텍스트 입력"
+        val input = makeStyledEditText("텍스트 입력").apply {
             minLines = 2
         }
-        val sizeInput = EditText(this).apply {
+        val sizeInput = makeStyledEditText("폰트 크기 (pt)").apply {
             setText("14")
-            hint = "폰트 크기 (pt)"
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or
                     android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
@@ -279,8 +278,7 @@ class PdfPagePreviewActivity : AppCompatActivity() {
     }
 
     private fun showStickyDialog(x: Float, y: Float) {
-        val input = EditText(this).apply {
-            hint = "메모 내용"
+        val input = makeStyledEditText("메모 내용").apply {
             minLines = 3
         }
         AlertDialog.Builder(this)
@@ -370,6 +368,17 @@ class PdfPagePreviewActivity : AppCompatActivity() {
             }
             .setNegativeButton("취소", null)
             .show()
+    }
+
+    private fun makeStyledEditText(hint: String = ""): EditText {
+        return EditText(this).apply {
+            this.hint = hint
+            setHintTextColor(0xFF888888.toInt())
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 15f
+            setPadding(24, 20, 24, 20)
+            setBackgroundColor(0xFF2A2A2A.toInt())
+        }
     }
 
     private fun returnResult() {

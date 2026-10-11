@@ -235,6 +235,32 @@ class PdfEditorActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * ⭐ 다크 테마용 EditText 스타일
+     */
+    private fun makeStyledEditText(hint: String = ""): EditText {
+        return EditText(this).apply {
+            this.hint = hint
+            setHintTextColor(0xFF888888.toInt())
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 15f
+            setPadding(24, 20, 24, 20)
+            setBackgroundColor(0xFF2A2A2A.toInt())
+        }
+    }
+
+    /**
+     * ⭐ 다크 테마용 TextView 스타일
+     */
+    private fun makeStyledTextView(text: String = "", size: Float = 12f): TextView {
+        return TextView(this).apply {
+            this.text = text
+            setTextColor(0xFFCCCCCC.toInt())
+            textSize = size
+            setPadding(0, 8, 0, 8)
+        }
+    }
+
     private fun refreshAdapter() {
         val pageInfos = session.getPageInfos()
         adapter = PdfEditPageAdapter(
@@ -476,7 +502,7 @@ class PdfEditorActivity : AppCompatActivity() {
     }
 
     private fun addStickyNoteOld(originalIndex: Int) {
-        val input = EditText(this).apply { hint = "메모 내용" }
+        val input = makeStyledEditText("메모 내용")
         AlertDialog.Builder(this)
             .setTitle("스티키 노트")
             .setView(input)
@@ -660,9 +686,8 @@ class PdfEditorActivity : AppCompatActivity() {
     }
 
     private fun showTextWatermarkInput() {
-        val input = EditText(this).apply {
+        val input = makeStyledEditText("워터마크 텍스트").apply {
             setText("CONFIDENTIAL")
-            hint = "워터마크 텍스트"
         }
         AlertDialog.Builder(this)
             .setTitle("텍스트 워터마크")
@@ -690,7 +715,7 @@ class PdfEditorActivity : AppCompatActivity() {
     }
 
     private fun showStampInput() {
-        val input = EditText(this).apply { hint = "스탬프 텍스트" }
+        val input = makeStyledEditText("스탬프 텍스트")
         AlertDialog.Builder(this)
             .setTitle("텍스트 스탬프 (페이지 ${currentPageIndex + 1})")
             .setView(input)
@@ -826,7 +851,7 @@ class PdfEditorActivity : AppCompatActivity() {
                 }
             }
             .setNeutralButton("다른 이름으로") { _, _ ->
-                val input = EditText(this).apply {
+                val input = makeStyledEditText("새 파일명").apply {
                     setText("${file.nameWithoutExtension}_edited.pdf")
                 }
                 AlertDialog.Builder(this)
@@ -898,10 +923,9 @@ class PdfEditorActivity : AppCompatActivity() {
      * ⭐ 텍스트 수정 입력 다이얼로그
      */
     private fun showEditTextInput(originalIndex: Int, word: PdfTextPicker.Word) {
-        val input = EditText(this).apply {
+        val input = makeStyledEditText("새 텍스트").apply {
             setText(word.text)
             setSelection(word.text.length)
-            hint = "새 텍스트"
         }
 
         val label = TextView(this).apply {
