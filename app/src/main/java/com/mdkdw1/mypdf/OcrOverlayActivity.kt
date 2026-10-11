@@ -81,7 +81,7 @@ fun OcrOverlayScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var targetLang by remember { mutableStateOf(prefs.targetLang) }
     var totalPages by remember { mutableStateOf(1) }
-    var showOriginalText by remember { mutableStateOf(true) }
+    var hideOriginal by remember { mutableStateOf(true) }
 
     // 페이지 로드 + OCR
     LaunchedEffect(pageIndex) {
@@ -120,9 +120,9 @@ fun OcrOverlayScreen(
                 },
                 actions = {
                     // 원본 텍스트 표시 토글
-                    IconButton(onClick = { showOriginalText = !showOriginalText }) {
+                    IconButton(onClick = { hideOriginal = !hideOriginal }) {
                         Icon(
-                            if (showOriginalText) Icons.Filled.Visibility
+                            if (hideOriginal) Icons.Filled.Visibility
                             else Icons.Filled.VisibilityOff,
                             "원본"
                         )
@@ -266,7 +266,7 @@ fun OcrOverlayScreen(
                     pageBitmap != null -> OverlayCanvas(
                         bitmap = pageBitmap!!,
                         blocks = blocks,
-                        showOriginal = showOriginalText
+                        showOriginal = hideOriginal
                     )
                 }
             }
@@ -278,7 +278,7 @@ fun OcrOverlayScreen(
 fun OverlayCanvas(
     bitmap: Bitmap,
     blocks: List<PdfOcrOverlay.TextBlock>,
-    showOriginal: Boolean
+    hideOriginal: Boolean
 ) {
     // 이미지 크기 vs 캔버스 크기 비율
     var canvasSize by remember { mutableStateOf(Size.Zero) }
@@ -333,13 +333,13 @@ fun OverlayCanvas(
                 val bw = block.boundingBox.width() * fitScale * scale
                 val bh = block.boundingBox.height() * fitScale * scale
 
-                // 배경 (원본 텍스트 덮기)
-                if (showOriginal && block.translated != null) {
-                    // 흰색 반투명 배경
+                // ⭐ 원본 텍스트 완전히 덮기 (번역 결과가 있을 때)
+                if (block.translated != null && !block.translated.isNullOrBlank()) {
+                    // 완전 불투명 흰색 (원본 가림)
                     drawRect(
-                        color = Color(0xEEFFFFFF),
-                        topLeft = Offset(bx, by),
-                        size = Size(bw, bh)
+                        color = Color.White,  // 0xFFFFFFFF
+                        topLeft = Offset(bx - 3f, by - 2f),  // 여유 패딩
+                        size = Size(bw + 6f, bh + 4f)
                     )
                 }
 
@@ -351,18 +351,24 @@ fun OverlayCanvas(
                 drawIntoCanvas { canvas ->
                     val paint = android.graphics.Paint().apply {
                         color = textColor.toArgb()
-                        textSize = (bh * 0.85f).coerceIn(8f, 40f)
+                        textSize = (bh * 0.75f).coerceIn(8f, 40f)
                         isAntiAlias = true
                         textAlign = android.graphics.Paint.Align.LEFT
+                        typeface = android.graphics.Typeface.DEFAULT
                     }
-                    val lines = wrapText(displayText, paint, bw)
+                    // 번역문은 폭에 맞게 줄바꿈, 원본 텍스트도 함께 고려
+                    val lines = wrapText(displayText, paint, bw - 4f)
+                    val lineHeight = paint.textSize * 1.1f
                     lines.forEachIndexed { idx, line ->
-                        canvas.nativeCanvas.drawText(
-                            line,
-                            bx + 2f,
-                            by + paint.textSize * (idx + 1),
-                            paint
-                        )
+                        val y = by + paint.textSize + idx * lineHeight
+                        if (y < by + bh + 20f) {  // 영역 안에만
+                            canvas.nativeCanvas.drawText(
+                                line,
+                                bx + 2f,
+                                y,
+                                paint
+                            )
+                        }
                     }
                 }
             }

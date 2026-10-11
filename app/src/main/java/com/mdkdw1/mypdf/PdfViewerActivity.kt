@@ -39,45 +39,42 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
     private var lastTapX = 0f
     private var lastTapY = 0f
 
-    // ⭐ PDFView 커스텀: 롱프레스 자체 감지 (스크롤 컨테이너 문제 회피)
+    // ⭐ PDFView 커스텀: GestureDetector로 롱프레스 감지 (가장 안정적)
     private inner class RecordingPdfView(context: android.content.Context) : PDFView(context, null) {
-        private val handler = android.os.Handler(android.os.Looper.getMainLooper())
-        private var longPressRunnable: Runnable? = null
-        private var downX = 0f
-        private var downY = 0f
-        private var longPressTriggered = false
+        private val gestureDetector = android.view.GestureDetector(
+            context,
+            object : android.view.GestureDetector.SimpleOnGestureListener() {
+                override fun onDown(e: android.view.MotionEvent): Boolean {
+                    lastTapX = e.x
+                    lastTapY = e.y
+                    return true
+                }
 
-        override fun onTouchEvent(event: MotionEvent): Boolean {
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    lastTapX = event.x
-                    lastTapY = event.y
-                    downX = event.x
-                    downY = event.y
-                    longPressTriggered = false
-
+                override fun onLongPress(e: android.view.MotionEvent) {
+                    android.util.Log.d("PdfViewer", "onLongPress 감지! selectionMode=$selectionMode")
                     if (selectionMode) {
-                        longPressRunnable = Runnable {
-                            longPressTriggered = true
-                            handleLongPress()
-                        }
-                        handler.postDelayed(longPressRunnable!!, 600L)
+                        lastTapX = e.x
+                        lastTapY = e.y
+                        handleLongPress()
                     }
                 }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = kotlin.math.abs(event.x - downX)
-                    val dy = kotlin.math.abs(event.y - downY)
-                    if (dx > 20f || dy > 20f) {
-                        // 움직임 감지 → 롱프레스 취소
-                        longPressRunnable?.let { handler.removeCallbacks(it) }
-                        longPressRunnable = null
-                    }
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    longPressRunnable?.let { handler.removeCallbacks(it) }
-                    longPressRunnable = null
+
+                override fun onSingleTapUp(e: android.view.MotionEvent): Boolean {
+                    // 툴바 토글 등 (선택)
+                    return false
                 }
             }
+        )
+
+        override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+            // 좌표 기록
+            if (event.action == android.view.MotionEvent.ACTION_DOWN) {
+                lastTapX = event.x
+                lastTapY = event.y
+            }
+            // GestureDetector에 이벤트 전달
+            gestureDetector.onTouchEvent(event)
+            // PDFView 자체 처리도 계속
             return super.onTouchEvent(event)
         }
     }
