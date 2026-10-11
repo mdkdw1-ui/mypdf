@@ -3,6 +3,7 @@ package com.mdkdw1.mypdf
 import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -33,11 +34,21 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
 
     private var pageCount = 0
     private var currentPage = 0
-    private var toolbarVisible = true
     private var selectionMode = false
 
     private var lastTapX = 0f
     private var lastTapY = 0f
+
+    // ⭐ PDFView 커스텀: 터치 좌표 기록 + 이벤트 통과
+    private inner class RecordingPdfView(context: android.content.Context) : PDFView(context, null) {
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            if (event.action == MotionEvent.ACTION_DOWN) {
+                lastTapX = event.x
+                lastTapY = event.y
+            }
+            return super.onTouchEvent(event)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,10 +63,16 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
 
+        // ── 루트 레이아웃 ──
         val root = FrameLayout(this)
 
-        // PDFView — XML inflate
-        pdfView = layoutInflater.inflate(R.layout.view_pdf, root, false) as PDFView
+        // ⭐ PDFView — 커스텀 RecordingPdfView 사용
+        pdfView = RecordingPdfView(this)
+        val pdfLp = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        pdfView.layoutParams = pdfLp
         root.addView(pdfView)
 
         // ── 상단 툴바 ──
@@ -72,7 +89,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         toolbar.layoutParams = toolbarLp
 
         val btnClose = Button(this)
-        btnClose.setText("✕")
+        btnClose.text = "✕"
         btnClose.setTextColor(0xFFFFFFFF.toInt())
         btnClose.setBackgroundColor(0)
         btnClose.setOnClickListener { finish() }
@@ -86,7 +103,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         tvFileName.setPadding(16, 0, 8, 0)
 
         val btnSelect = Button(this)
-        btnSelect.setText("✏")
+        btnSelect.text = "✏"
         btnSelect.setTextColor(0xFFFFFFFF.toInt())
         btnSelect.setBackgroundColor(0)
         btnSelect.setOnClickListener {
@@ -100,7 +117,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         }
 
         val btnOverlay = Button(this)
-        btnOverlay.setText("🎨")
+        btnOverlay.text = "🎨"
         btnOverlay.setTextColor(0xFFFFFFFF.toInt())
         btnOverlay.setBackgroundColor(0)
         btnOverlay.setOnClickListener {
@@ -111,7 +128,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         }
 
         val btnSettings = Button(this)
-        btnSettings.setText("⚙")
+        btnSettings.text = "⚙"
         btnSettings.setTextColor(0xFFFFFFFF.toInt())
         btnSettings.setBackgroundColor(0)
         btnSettings.setOnClickListener {
@@ -139,7 +156,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         bottomBar.layoutParams = bottomLp
 
         val btnPrev = Button(this)
-        btnPrev.setText("◀")
+        btnPrev.text = "◀"
         btnPrev.setOnClickListener {
             if (currentPage > 0) pdfView.jumpTo(currentPage - 1)
         }
@@ -148,10 +165,10 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         tvPageInfo.setTextColor(0xFFFFFFFF.toInt())
         tvPageInfo.textSize = 14f
         tvPageInfo.setPadding(24, 0, 24, 0)
-        tvPageInfo.setText("0 / 0")
+        tvPageInfo.text = "0 / 0"
 
         val btnNext = Button(this)
-        btnNext.setText("▶")
+        btnNext.text = "▶"
         btnNext.setOnClickListener {
             if (currentPage < pageCount - 1) pdfView.jumpTo(currentPage + 1)
         }
@@ -163,49 +180,38 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
 
         setContentView(root)
 
+        // ⭐ PDFView 초기화 (터치 설정 없음!)
         loadPdf()
 
+        // ⭐ 롱프레스만 PDFView에 설정 (clickListener 없이)
         pdfView.setOnLongClickListener {
             if (selectionMode) {
                 handleLongPress()
                 true
             } else false
         }
-
-        pdfView.setOnTouchListener { _, event ->
-            if (event.action == android.view.MotionEvent.ACTION_DOWN) {
-                lastTapX = event.x
-                lastTapY = event.y
-            }
-            false
-        }
-
-        pdfView.setOnClickListener {
-            toolbarVisible = !toolbarVisible
-            val v = if (toolbarVisible) View.VISIBLE else View.GONE
-            toolbar.visibility = v
-            bottomBar.visibility = v
-        }
     }
 
     private fun loadPdf() {
-        tvFileName.setText(file.name)
+        tvFileName.text = file.name
 
+        // ⭐ 핀치 줌 + 스크롤 완전 활성
         pdfView.fromFile(file)
-            .enableSwipe(true)
-            .swipeHorizontal(false)
-            .enableDoubletap(true)
-            .enableAntialiasing(true)
-            .spacing(10)
+            .enableSwipe(true)              // 스와이프 활성
+            .swipeHorizontal(false)         // 세로 스크롤
+            .enableDoubletap(true)          // 더블탭 줌
+            .enableAntialiasing(true)       // 안티앨리어싱
+            .spacing(10)                    // 페이지 간격
             .defaultPage(prefs.getPage(file.name))
             .scrollHandle(DefaultScrollHandle(this))
             .onLoad(this)
             .onPageChange(this)
             .load()
 
-        pdfView.useBestQuality(true)
+        // ⭐ 줌 범위
         pdfView.setMaxZoom(5.0f)
         pdfView.setMinZoom(0.5f)
+        pdfView.useBestQuality(true)
     }
 
     private fun handleLongPress() {
@@ -245,38 +251,32 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
     }
 
     private fun showTranslateDialog(sourceText: String) {
-        // ── 입력 필드 ──
         val input = EditText(this)
         input.setText(sourceText)
         input.setSelection(sourceText.length)
 
-        // ── 출력 필드 ──
         val output = TextView(this)
         output.textSize = 14f
         output.setPadding(24, 24, 24, 24)
         output.setTextColor(0xFF333333.toInt())
 
-        // ── 라벨 1 ──
         val label1 = TextView(this)
         label1.setText("텍스트:")
         label1.setTextColor(0xFF888888.toInt())
         label1.textSize = 11f
 
-        // ── 라벨 2 ──
         val label2 = TextView(this)
         label2.setText("번역:")
         label2.setTextColor(0xFF888888.toInt())
         label2.textSize = 11f
         label2.setPadding(0, 16, 0, 8)
 
-        // ── 스크롤 ──
         val scroll = ScrollView(this)
         scroll.layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
         )
         scroll.addView(output)
 
-        // ── 컨테이너 ──
         val container = LinearLayout(this)
         container.orientation = LinearLayout.VERTICAL
         container.setPadding(24, 16, 24, 16)
@@ -310,7 +310,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
     override fun loadComplete(nbPages: Int) {
         pageCount = nbPages
         runOnUiThread {
-            tvPageInfo.setText("1 / $nbPages")
+            tvPageInfo.text = "1 / $nbPages"
         }
     }
 
@@ -318,7 +318,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         currentPage = page
         prefs.savePage(file.name, page)
         runOnUiThread {
-            tvPageInfo.setText("${page + 1} / $pageCount")
+            tvPageInfo.text = "${page + 1} / $pageCount"
         }
     }
 }
