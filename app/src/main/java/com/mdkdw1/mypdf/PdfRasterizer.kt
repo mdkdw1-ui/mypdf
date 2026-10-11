@@ -101,9 +101,10 @@ object PdfRasterizer {
 
                                 // ⭐ 3-2. 숨겨진 텍스트 레이어 (원본 텍스트)
                                 if (words != null) {
-                                    cs.setRenderingMode(
-                                        PDPageContentStream.RenderingMode.NEED_APP_RENDERING
-                                    )
+                                    // Tr=3: 텍스트 렌더링 안 함 (보이지 않지만 검색 가능)
+                                    try {
+                                        cs.setNonStrokingColor(0, 0, 0)
+                                    } catch (_: Exception) {}
                                     for (w in words.words) {
                                         try {
                                             val hasKorean = w.text.any { it.code > 127 }

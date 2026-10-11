@@ -66,10 +66,8 @@ class PdfPageEditorActivity : AppCompatActivity() {
     private lateinit var file: File
     private var pageIndex = 0
 
-    // 추가된 텍스트 (검색용)
-    private val addedTexts = mutableListOf<AddedText>()
-
-    data class AddedText(val text: String, val x: Float, val y: Float, val fontSize: Float)
+    // 추가된 텍스트 (검색용) — PdfRasterizer.TextOverlay 사용
+    private val addedTexts = mutableListOf<PdfRasterizer.TextOverlay>()
 
     sealed class DrawAction {
         data class Stroke(val path: Path, val color: Int, val width: Float, val alpha: Int) : DrawAction()
@@ -321,6 +319,10 @@ class PdfPageEditorActivity : AppCompatActivity() {
                         // 텍스트 위치 → 다이얼로그
                         showTextInputDialog(pt.x, pt.y)
                     }
+                    Tool.ERASER -> {
+                        // 지우개: 마지막 액션 취소
+                        undo()
+                    }
                 }
                 return true
             }
@@ -334,6 +336,9 @@ class PdfPageEditorActivity : AppCompatActivity() {
                     Tool.RECT, Tool.CIRCLE -> {
                         currentEnd = pt
                         redrawCanvas()
+                    }
+                    Tool.TEXT, Tool.ERASER -> {
+                        // 움직임 무시
                     }
                 }
                 return true
@@ -385,6 +390,9 @@ class PdfPageEditorActivity : AppCompatActivity() {
                             undoneActions.clear()
                         }
                         currentStart = null; currentEnd = null
+                    }
+                    Tool.TEXT, Tool.ERASER -> {
+                        // 위에서 처리됨
                     }
                 }
                 isDrawing = false
