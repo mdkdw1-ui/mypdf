@@ -971,7 +971,7 @@ class PdfEditorActivity : AppCompatActivity() {
             Toast.makeText(this@PdfEditorActivity, "저장 중...", Toast.LENGTH_SHORT).show()
 
             // ⭐ word.y는 좌상단 기준 → 좌하단 변환 필요
-            val pageHeight = result?.pageHeightPt ?: 842f  // word 추출 시 페이지 높이 저장 필요
+            val pageHeight = 842f
 
             PdfTextEditor.replaceText(
                 context = this@PdfEditorActivity,
