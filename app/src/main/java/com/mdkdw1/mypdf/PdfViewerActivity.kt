@@ -90,8 +90,8 @@ class PdfViewerActivity : AppCompatActivity() {
             return
         }
 
-        // ── 루트 ──
-        val root = FrameLayout(this)
+        // ── 루트 (핀치 줌 지원) ──
+        val root = ZoomableFrameLayout(this)
 
         // ── RecyclerView ──
         recyclerView = RecyclerView(this)
@@ -105,6 +105,9 @@ class PdfViewerActivity : AppCompatActivity() {
 
         adapter = PdfPageAdapter(pages)
         recyclerView.adapter = adapter
+
+        // ⭐ 전체 페이지 핀치 줌 연결
+        root.target = recyclerView
 
         // ── 상단 툴바 ──
         val toolbar = LinearLayout(this).apply {
@@ -286,12 +289,12 @@ class PdfViewerActivity : AppCompatActivity() {
                                     }
                                 }
                             }
-                            handler.postDelayed(runnable!!, 600L)
+                            handler.postDelayed(runnable!!, 800L)
                         }
                     }
                     MotionEvent.ACTION_MOVE -> {
-                        if (kotlin.math.abs(e.x - downX) > 20f ||
-                            kotlin.math.abs(e.y - downY) > 20f) {
+                        if (kotlin.math.abs(e.x - downX) > 30f ||
+                            kotlin.math.abs(e.y - downY) > 30f) {
                             runnable?.let { handler.removeCallbacks(it) }
                             runnable = null
                         }

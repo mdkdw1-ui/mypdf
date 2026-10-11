@@ -188,7 +188,7 @@ object PdfTextPicker {
         words: List<Word>,
         pdfX: Float,
         pdfY: Float,
-        threshold: Float = 30f
+        threshold: Float = 50f
     ): Word? {
         val nearest = words.minByOrNull { w ->
             val cx = w.x + w.width / 2
