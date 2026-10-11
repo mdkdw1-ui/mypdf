@@ -70,6 +70,12 @@
             android:exported="false"
             android:label="통번역"
             android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".OcrOverlayActivity"
+            android:exported="false"
+            android:label="오버레이 번역"
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
     </application>
 
     <queries>

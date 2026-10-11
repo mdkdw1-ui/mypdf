@@ -31,6 +31,7 @@ import com.mdkdw1.mypdf.VisionTranslateActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+import com.mdkdw1.mypdf.OcrOverlayActivity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,6 +80,12 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
             factory = { ctx ->
                 val view = LayoutInflater.from(ctx)
                     .inflate(com.mdkdw1.mypdf.R.layout.view_pdf, null, false) as PDFView
+
+                // ⭐ 핀치 줌/스크롤 보장 설정
+                view.useBestQuality(true)
+                view.setMaxZoom(5.0f)
+                view.setMinZoom(0.5f)
+
                 view.fromFile(file)
                     .enableSwipe(true)
                     .swipeHorizontal(isHorizontal)
@@ -94,7 +101,7 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
                     }
                     .load()
 
-                // ⭐ 롱프레스 → 번역 (선택 모드일 때만)
+                // ⭐ 롱프레스 (선택 모드일 때만)
                 view.setOnLongClickListener {
                     if (selectionMode) {
                         scope.launch {
@@ -109,23 +116,20 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
                                 if (found != null) {
                                     detectedText = found.text
                                     showTranslateDialog = true
-                                } else {
-                                    android.widget.Toast.makeText(
-                                        context, "텍스트 없음",
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
                                 }
                             }
                         }
                         true
                     } else false
                 }
+
+                // ⭐ 터치 좌표 추적만 (핀치 이벤트는 PDFView로 전달)
                 view.setOnTouchListener { _, event ->
                     if (event.action == android.view.MotionEvent.ACTION_DOWN) {
                         lastTapX = event.x
                         lastTapY = event.y
                     }
-                    false  // PDFView에 터치 전달 (핀치 확대 유지)
+                    false
                 }
 
                 pdfViewRef = view
@@ -212,6 +216,20 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
                             "눈건강"
                         )
                     }
+                    // 🎨 오버레이 번역 (레이아웃 유지)
+                    IconButton(onClick = {
+                        context.startActivity(
+                            android.content.Intent(
+                                context, OcrOverlayActivity::class.java
+                            ).apply {
+                                putExtra("pdf_path", file.absolutePath)
+                                putExtra("page_index", currentPage)
+                            }
+                        )
+                    }) {
+                        Icon(Icons.Filled.Layers, "오버레이")
+                    }
+                    // 설정
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(Icons.Filled.Settings, "설정")
                     }
