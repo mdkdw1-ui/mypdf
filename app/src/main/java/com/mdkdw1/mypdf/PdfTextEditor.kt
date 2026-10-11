@@ -221,11 +221,12 @@ object PdfTextEditor {
                 try {
                     val resources = page.resources
                     if (resources != null) {
-                        for (fontName in resources.fontNames) {
+                        for (cosName in resources.fontNames) {
                             try {
-                                val f = resources.getFont(fontName)
+                                val fontKey = cosName.name ?: cosName.toString()
+                                val f = resources.getFont(cosName)
                                 if (f != null) {
-                                    availableFonts[fontName] = f
+                                    availableFonts[fontKey] = f
                                     f.name?.let { availableFonts[it] = f }
                                 }
                             } catch (_: Exception) {}
@@ -299,8 +300,11 @@ object PdfTextEditor {
                                 cs.newLineAtOffset(word.x, baselineY)
                                 cs.showText(newText.take(200))
                                 cs.endText()
+                                val fontDisplayName = try {
+                                    originalFont.name ?: "unknown"
+                                } catch (_: Exception) { "unknown" }
                                 CrashLogger.log(context, "PdfTextEditor",
-                                    "교체(Font '${originalFont.name}'): " +
+                                    "교체(Font '$fontDisplayName'): " +
                                     "'${word.text}' → '$newText' (was ${word.fontName})")
                             } catch (e: Exception) {
                                 // 원본 폰트로 실패 → Bitmap 폴백
