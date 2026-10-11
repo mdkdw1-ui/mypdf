@@ -26,18 +26,59 @@ import java.io.File
 
 class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompleteListener {
 
-    // ⭐ PDFView를 상속한 커스텀 뷰 — onTouchEvent만 오버라이드
+    // ⭐ PDFView 커스텀 — dispatchTouchEvent로 롱프레스 감지 (스크롤/핀치 유지)
     private inner class TouchablePdfView(context: android.content.Context) : PDFView(context, null) {
-        override fun onTouchEvent(event: MotionEvent): Boolean {
-            // 좌표 기록
-            if (event.action == MotionEvent.ACTION_DOWN) {
-                lastTapX = event.x
-                lastTapY = event.y
+        private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        private var longPressRunnable: Runnable? = null
+        private var downX = 0f
+        private var downY = 0f
+        private var longPressFired = false
+
+        override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastTapX = event.x
+                    lastTapY = event.y
+                    downX = event.x
+                    downY = event.y
+                    longPressFired = false
+
+                    android.util.Log.d("PdfViewer",
+                        "DOWN selection=$selectionMode x=${event.x} y=${event.y}")
+
+                    // ⭐ 선택 모드일 때만 롱프레스 타이머 시작
+                    if (selectionMode) {
+                        longPressRunnable?.let { handler.removeCallbacks(it) }
+                        longPressRunnable = Runnable {
+                            if (!longPressFired) {
+                                longPressFired = true
+                                android.util.Log.d("PdfViewer", "⭐ LONG PRESS FIRED!")
+                                handleLongPress()
+                            }
+                        }
+                        handler.postDelayed(longPressRunnable!!, 600L)
+                    }
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    // 움직임이 크면 롱프레스 취소 (스크롤 의도)
+                    val dx = kotlin.math.abs(event.x - downX)
+                    val dy = kotlin.math.abs(event.y - downY)
+                    if (dx > 20f || dy > 20f) {
+                        if (!longPressFired) {
+                            longPressRunnable?.let { handler.removeCallbacks(it) }
+                            longPressRunnable = null
+                        }
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (!longPressFired) {
+                        longPressRunnable?.let { handler.removeCallbacks(it) }
+                        longPressRunnable = null
+                    }
+                }
             }
-            // GestureDetector에 전달 (롱프레스 감지)
-            gestureDetector.onTouchEvent(event)
-            // ⭐ PDFView 원래 동작 (스크롤/핀치) 유지
-            return super.onTouchEvent(event)
+            // ⭐ PDFView의 원래 터치 처리는 그대로 유지 (스크롤/핀치 작동)
+            return super.dispatchTouchEvent(event)
         }
     }
 
