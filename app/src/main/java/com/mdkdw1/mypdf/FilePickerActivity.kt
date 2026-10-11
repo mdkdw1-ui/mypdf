@@ -102,7 +102,7 @@ class FilePickerActivity : AppCompatActivity() {
         // 검색창
         etSearch = EditText(this).apply {
             hint = "현재 폴더에서 검색..."
-            singleLine = true
+            setSingleLine(true)
             setPadding(24, 20, 24, 20)
             addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
