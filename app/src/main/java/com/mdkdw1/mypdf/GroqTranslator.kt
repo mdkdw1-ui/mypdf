@@ -13,11 +13,10 @@ import java.net.URL
 object GroqTranslator {
 
     private const val ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
-    private const val MODEL = "llama-3.3-70b-versatile"
 
-    /**
-     * 번역 - 모드: "word" (단어) / "sentence" (문장) / "doc" (전체)
-     */
+    // ⭐ 검증된 최신 Groq 모델 (2026-01)
+    private const val MODEL = "openai/gpt-oss-120b"
+
     suspend fun translate(
         apiKey: String,
         text: String,
@@ -26,24 +25,28 @@ object GroqTranslator {
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val langName = langName(targetLang)
+
+            // 번역 프롬프트 (reasoning 방지: "no explanation" 강조)
             val systemPrompt = when (mode) {
                 "word" -> """
-                    You are a dictionary and translator. For the given word or short phrase:
-                    1. Give the most common translation to $langName
-                    2. If it's a noun, add part of speech
-                    3. Add 1-2 example sentences if useful
-                    Keep it concise. Output in $langName.
+                    You are a dictionary translator. For the given word:
+                    1. Translate to $langName
+                    2. Add part of speech
+                    3. Optionally 1 example
+                    Keep concise. NO explanations, NO reasoning.
                 """.trimIndent()
                 "sentence" -> """
-                    Translate the sentence to $langName naturally, preserving tone.
-                    Output ONLY the translation, no quotes, no explanation.
+                    Translate to $langName. Output ONLY the translation.
+                    NO explanations, NO reasoning, NO quotes.
                 """.trimIndent()
                 "doc" -> """
-                    Translate the following document to $langName.
-                    Preserve paragraph structure. Output ONLY the translation.
+                    Translate the document to $langName.
+                    Preserve paragraphs. Output ONLY the translation.
+                    NO explanations, NO reasoning.
                 """.trimIndent()
                 else -> """
-                    Translate to $langName naturally. Output ONLY the translation.
+                    Translate to $langName. Output ONLY the translation.
+                    NO explanations, NO reasoning.
                 """.trimIndent()
             }
 
@@ -78,9 +81,12 @@ object GroqTranslator {
             val response = BufferedReader(InputStreamReader(stream)).use { it.readText() }
 
             if (code !in 200..299) {
-                return@withContext Result.failure(
-                    Exception("Groq API 오류 $code: ${response.take(300)}")
-                )
+                val msg = try {
+                    JSONObject(response).getJSONObject("error").getString("message")
+                } catch (_: Exception) {
+                    response.take(300)
+                }
+                return@withContext Result.failure(Exception("Groq 오류 $code: $msg"))
             }
 
             val json = JSONObject(response)
@@ -96,7 +102,6 @@ object GroqTranslator {
         }
     }
 
-    /** 언어 코드 → 이름 */
     fun langName(code: String): String = when (code) {
         "ko" -> "Korean"
         "en" -> "English"
@@ -109,7 +114,6 @@ object GroqTranslator {
         else -> code
     }
 
-    /** 텍스트 언어 자동 감지 (한글/영어/일본어/중국어) */
     fun detectLang(text: String): String {
         if (text.isEmpty()) return "en"
         var korean = 0; var japanese = 0; var chinese = 0; var latin = 0
@@ -121,8 +125,7 @@ object GroqTranslator {
                 c.code in 0x0041..0x007A -> latin++
             }
         }
-        val max = maxOf(korean, japanese, chinese, latin)
-        return when (max) {
+        return when (maxOf(korean, japanese, chinese, latin)) {
             korean -> "ko"
             japanese -> "ja"
             chinese -> "zh"
