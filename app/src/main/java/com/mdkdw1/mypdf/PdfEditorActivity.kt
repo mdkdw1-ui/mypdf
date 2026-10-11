@@ -334,12 +334,26 @@ class PdfEditorActivity : AppCompatActivity() {
                 6 -> rotatePage(originalIndex, 90)
                 7 -> rotatePage(originalIndex, -90)
                 8 -> {
-                    if (currentPos > 0) session.movePage(currentPos, currentPos - 1)
-                    else Toast.makeText(this, "첫 페이지", Toast.LENGTH_SHORT).show()
+                    if (currentPos > 0) {
+                        lifecycleScope.launch {
+                            session.movePage(currentPos, currentPos - 1).fold(
+                                onSuccess = { refreshAdapter() },
+                                onFailure = { Toast.makeText(this@PdfEditorActivity,
+                                    "❌ ${it.message}", Toast.LENGTH_LONG).show() }
+                            )
+                        }
+                    } else Toast.makeText(this, "첫 페이지", Toast.LENGTH_SHORT).show()
                 }
                 9 -> {
-                    if (currentPos < session.pageCount - 1) session.movePage(currentPos, currentPos + 1)
-                    else Toast.makeText(this, "마지막 페이지", Toast.LENGTH_SHORT).show()
+                    if (currentPos < session.pageCount - 1) {
+                        lifecycleScope.launch {
+                            session.movePage(currentPos, currentPos + 1).fold(
+                                onSuccess = { refreshAdapter() },
+                                onFailure = { Toast.makeText(this@PdfEditorActivity,
+                                    "❌ ${it.message}", Toast.LENGTH_LONG).show() }
+                            )
+                        }
+                    } else Toast.makeText(this, "마지막 페이지", Toast.LENGTH_SHORT).show()
                 }
                 10 -> extractPage(originalIndex)
                 11 -> confirmDeletePage(originalIndex)
@@ -380,12 +394,26 @@ class PdfEditorActivity : AppCompatActivity() {
                     6 -> rotatePage(originalIndex, 90)
                     7 -> rotatePage(originalIndex, -90)
                     8 -> {
-                        if (currentPos > 0) session.movePage(currentPos, currentPos - 1)
-                        else Toast.makeText(this, "첫 페이지", Toast.LENGTH_SHORT).show()
+                        if (currentPos > 0) {
+                            lifecycleScope.launch {
+                                session.movePage(currentPos, currentPos - 1).fold(
+                                    onSuccess = { refreshAdapter() },
+                                    onFailure = { Toast.makeText(this@PdfEditorActivity,
+                                        "❌ ${it.message}", Toast.LENGTH_LONG).show() }
+                                )
+                            }
+                        } else Toast.makeText(this, "첫 페이지", Toast.LENGTH_SHORT).show()
                     }
                     9 -> {
-                        if (currentPos < session.pageCount - 1) session.movePage(currentPos, currentPos + 1)
-                        else Toast.makeText(this, "마지막 페이지", Toast.LENGTH_SHORT).show()
+                        if (currentPos < session.pageCount - 1) {
+                            lifecycleScope.launch {
+                                session.movePage(currentPos, currentPos + 1).fold(
+                                    onSuccess = { refreshAdapter() },
+                                    onFailure = { Toast.makeText(this@PdfEditorActivity,
+                                        "❌ ${it.message}", Toast.LENGTH_LONG).show() }
+                                )
+                            }
+                        } else Toast.makeText(this, "마지막 페이지", Toast.LENGTH_SHORT).show()
                     }
                     10 -> confirmDeletePage(originalIndex)
                     11 -> extractPage(originalIndex)
