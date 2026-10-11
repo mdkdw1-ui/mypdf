@@ -38,6 +38,19 @@ class PdfEditorActivity : AppCompatActivity() {
     private val thumbnails = mutableMapOf<Int, Bitmap?>()
     private var currentPageIndex = 0
 
+    // ⭐ 미리보기 결과 런처
+    private val previewLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val idx = result.data?.getIntExtra(
+                PdfPagePreviewActivity.RESULT_PAGE_INDEX, -1) ?: -1
+            if (idx >= 0) {
+                refreshThumb(idx)
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -232,11 +245,13 @@ class PdfEditorActivity : AppCompatActivity() {
                 showPageMenu(originalIndex)
             },
             onPageLongClick = { originalIndex ->
-                // ⭐ 롱프레스 → 큰 미리보기 (핀치)
-                val intent = Intent(this@PdfEditorActivity, PdfPagePreviewActivity::class.java)
-                intent.putExtra(PdfPagePreviewActivity.EXTRA_PATH, file.absolutePath)
-                intent.putExtra(PdfPagePreviewActivity.EXTRA_PAGE, originalIndex)
-                startActivity(intent)
+                // ⭐ 롱프레스 → 순수 미리보기
+                val intent = Intent(this@PdfEditorActivity, PdfPagePreviewActivity::class.java).apply {
+                    putExtra(PdfPagePreviewActivity.EXTRA_PATH, file.absolutePath)
+                    putExtra(PdfPagePreviewActivity.EXTRA_PAGE, originalIndex)
+                    putExtra(PdfPagePreviewActivity.EXTRA_MODE, PdfPagePreviewActivity.MODE_PREVIEW)
+                }
+                previewLauncher.launch(intent)
             }
         )
         recyclerView.adapter = adapter
@@ -396,6 +411,16 @@ class PdfEditorActivity : AppCompatActivity() {
     }
 
     private fun addHighlight(originalIndex: Int) {
+        // ⭐ 미리보기로 위임
+        val intent = Intent(this, PdfPagePreviewActivity::class.java).apply {
+            putExtra(PdfPagePreviewActivity.EXTRA_PATH, file.absolutePath)
+            putExtra(PdfPagePreviewActivity.EXTRA_PAGE, originalIndex)
+            putExtra(PdfPagePreviewActivity.EXTRA_MODE, PdfPagePreviewActivity.MODE_HIGHLIGHT)
+        }
+        previewLauncher.launch(intent)
+    }
+
+    private fun addHighlightOld(originalIndex: Int) {
         lifecycleScope.launch {
             PdfAnnotation.addHighlight(
                 this@PdfEditorActivity, file, originalIndex,
@@ -413,6 +438,16 @@ class PdfEditorActivity : AppCompatActivity() {
     }
 
     private fun addStickyNote(originalIndex: Int) {
+        // ⭐ 미리보기로 위임
+        val intent = Intent(this, PdfPagePreviewActivity::class.java).apply {
+            putExtra(PdfPagePreviewActivity.EXTRA_PATH, file.absolutePath)
+            putExtra(PdfPagePreviewActivity.EXTRA_PAGE, originalIndex)
+            putExtra(PdfPagePreviewActivity.EXTRA_MODE, PdfPagePreviewActivity.MODE_STICKY)
+        }
+        previewLauncher.launch(intent)
+    }
+
+    private fun addStickyNoteOld(originalIndex: Int) {
         val input = EditText(this).apply { hint = "메모 내용" }
         AlertDialog.Builder(this)
             .setTitle("스티키 노트")
@@ -440,6 +475,15 @@ class PdfEditorActivity : AppCompatActivity() {
     }
 
     private fun addRectangle(originalIndex: Int) {
+        val intent = Intent(this, PdfPagePreviewActivity::class.java).apply {
+            putExtra(PdfPagePreviewActivity.EXTRA_PATH, file.absolutePath)
+            putExtra(PdfPagePreviewActivity.EXTRA_PAGE, originalIndex)
+            putExtra(PdfPagePreviewActivity.EXTRA_MODE, PdfPagePreviewActivity.MODE_RECTANGLE)
+        }
+        previewLauncher.launch(intent)
+    }
+
+    private fun addRectangleOld(originalIndex: Int) {
         lifecycleScope.launch {
             PdfAnnotation.addRectangle(
                 this@PdfEditorActivity, file, originalIndex,
@@ -457,6 +501,15 @@ class PdfEditorActivity : AppCompatActivity() {
     }
 
     private fun addCircle(originalIndex: Int) {
+        val intent = Intent(this, PdfPagePreviewActivity::class.java).apply {
+            putExtra(PdfPagePreviewActivity.EXTRA_PATH, file.absolutePath)
+            putExtra(PdfPagePreviewActivity.EXTRA_PAGE, originalIndex)
+            putExtra(PdfPagePreviewActivity.EXTRA_MODE, PdfPagePreviewActivity.MODE_CIRCLE)
+        }
+        previewLauncher.launch(intent)
+    }
+
+    private fun addCircleOld(originalIndex: Int) {
         lifecycleScope.launch {
             PdfAnnotation.addCircle(
                 this@PdfEditorActivity, file, originalIndex,
@@ -893,6 +946,16 @@ class PdfEditorActivity : AppCompatActivity() {
      * ⭐ 새 텍스트 추가 (좌표 지정)
      */
     private fun showAddTextDialog(originalIndex: Int) {
+        // ⭐ 미리보기 (탭으로 위치 지정)
+        val intent = Intent(this, PdfPagePreviewActivity::class.java).apply {
+            putExtra(PdfPagePreviewActivity.EXTRA_PATH, file.absolutePath)
+            putExtra(PdfPagePreviewActivity.EXTRA_PAGE, originalIndex)
+            putExtra(PdfPagePreviewActivity.EXTRA_MODE, PdfPagePreviewActivity.MODE_ADD_TEXT)
+        }
+        previewLauncher.launch(intent)
+    }
+
+    private fun showAddTextDialogOld(originalIndex: Int) {
         val input = EditText(this).apply {
             hint = "새 텍스트 입력"
             minLines = 2
