@@ -192,6 +192,79 @@ object PdfTextEditor {
     }
 
     /**
+     * ⭐ 여러 텍스트를 한 번에 교체 (원본 위치/크기 유지)
+     * @param edits Map<wordIndex, Pair<Word, newText>>
+     */
+    suspend fun replaceMultiple(
+        context: Context,
+        file: File,
+        pageIndex: Int,
+        edits: Map<Int, Pair<PdfTextPicker.Word, String>>
+    ): Result<File> = withContext(Dispatchers.IO) {
+        try {
+            PdfTextPicker.ensureInit(context)
+            PDDocument.load(file).use { doc ->
+                val page = doc.getPage(pageIndex)
+                val pageHeight = page.mediaBox.height
+
+                // 한글 폰트 (있으면)
+                val koreanFont: PDFont? = try {
+                    PDType0Font.load(
+                        doc,
+                        context.assets.open("fonts/NotoSansKR-Regular.otf"),
+                        true
+                    )
+                } catch (e: Exception) {
+                    null
+                }
+
+                PDPageContentStream(
+                    doc, page, PDPageContentStream.AppendMode.APPEND, true, true
+                ).use { cs ->
+                    for ((_, pair) in edits) {
+                        val (word, newText) = pair
+
+                        // ⭐ Y 좌표: word.y는 baseline (좌하단 기준)
+                        val baselineY = word.y
+                        val coverLeft = word.x - 2f
+                        val coverBottom = baselineY - word.height * 0.4f
+                        val coverW = word.width + 4f
+                        val coverH = word.height * 1.8f
+
+                        // 1) 덮기
+                        cs.setNonStrokingColor(255, 255, 255)
+                        cs.addRect(coverLeft, coverBottom, coverW, coverH)
+                        cs.fill()
+
+                        // 2) 새 텍스트 (원본 크기)
+                        val hasKorean = newText.any { it.code > 127 }
+                        val font = if (hasKorean && koreanFont != null) koreanFont
+                                   else PDType1Font.HELVETICA
+
+                        cs.setNonStrokingColor(0, 0, 0)
+                        cs.beginText()
+                        cs.setFont(font, word.fontSize.coerceIn(6f, 72f))
+                        cs.newLineAtOffset(word.x, baselineY)
+                        cs.showText(newText.take(200))
+                        cs.endText()
+
+                        CrashLogger.log(context, "PdfTextEditor",
+                            "교체: '${word.text}' → '$newText' " +
+                            "pos=(${"%.1f".format(word.x)}, ${"%.1f".format(baselineY)}) " +
+                            "font=${"%.1f".format(word.fontSize)}pt")
+                    }
+                }
+
+                safeSave(doc, file, context)
+            }
+            Result.success(file)
+        } catch (e: Exception) {
+            CrashLogger.e(context, "PdfTextEditor", "replaceMultiple 실패", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
      * ⭐ 새 텍스트 추가
      */
     suspend fun addText(

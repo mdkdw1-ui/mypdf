@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import com.mdkdw1.mypdf.PdfPageEditorActivity
+import com.mdkdw1.mypdf.PdfSimpleEditorActivity
 
 class PdfEditorActivity : AppCompatActivity() {
 
@@ -322,7 +323,7 @@ class PdfEditorActivity : AppCompatActivity() {
 
         // ⭐ 아이콘 그리드 메뉴
         val items = listOf(
-            MenuItem("🎨", "그림판 편집", 0),
+            MenuItem("✏️", "텍스트 편집", 0),
             MenuItem("✏️", "텍스트 수정", 1),
             MenuItem("➕", "텍스트 추가", 2),
             MenuItem("🖍", "하이라이트", 3),
@@ -354,10 +355,10 @@ class PdfEditorActivity : AppCompatActivity() {
             val id = items[position].id
             when (id) {
                 0 -> {
-                    // ⭐ 그림판 편집 (이미지 + 숨은 텍스트)
-                    val intent = Intent(this, PdfPageEditorActivity::class.java).apply {
-                        putExtra(PdfPageEditorActivity.EXTRA_PATH, file.absolutePath)
-                        putExtra(PdfPageEditorActivity.EXTRA_PAGE, originalIndex)
+                    // ⭐ 텍스트 편집 전용
+                    val intent = Intent(this, PdfSimpleEditorActivity::class.java).apply {
+                        putExtra(PdfSimpleEditorActivity.EXTRA_PATH, file.absolutePath)
+                        putExtra(PdfSimpleEditorActivity.EXTRA_PAGE, originalIndex)
                     }
                     previewLauncher.launch(intent)
                 }

@@ -97,6 +97,13 @@
             android:label="페이지 편집"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".PdfSimpleEditorActivity"
+            android:exported="false"
+            android:label="텍스트 편집"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
     </application>
 
     <queries>

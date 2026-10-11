@@ -7,6 +7,7 @@ import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.View
 import android.view.ScaleGestureDetector
 import androidx.appcompat.widget.AppCompatImageView
 import kotlin.math.abs
@@ -101,12 +102,25 @@ class ZoomablePageView @JvmOverloads constructor(
 
     override fun setImageDrawable(drawable: Drawable?) {
         super.setImageDrawable(drawable)
-        post {
-            matrix.reset()
-            if (drawable != null) {
-                fitImageToView()
-            }
+        if (drawable == null) return
+
+        // ⭐ width/height 대기 (핵심!)
+        if (width > 0 && height > 0) {
+            fitImageToView()
             imageMatrix = matrix
+        } else {
+            addOnLayoutChangeListener(object : OnLayoutChangeListener {
+                override fun onLayoutChange(
+                    v: View, l: Int, t: Int, r: Int, b: Int,
+                    ol: Int, ot: Int, or: Int, ob: Int
+                ) {
+                    removeOnLayoutChangeListener(this)
+                    if (width > 0 && height > 0) {
+                        fitImageToView()
+                        imageMatrix = matrix
+                    }
+                }
+            })
         }
     }
 
