@@ -13,8 +13,6 @@ import java.net.URL
 object GroqTranslator {
 
     private const val ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
-
-    // ⭐ 검증된 최신 Groq 모델 (2026-01)
     private const val MODEL = "openai/gpt-oss-120b"
 
     suspend fun translate(
@@ -25,34 +23,37 @@ object GroqTranslator {
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val langName = langName(targetLang)
+            val langCode = targetLang
 
-            // 번역 프롬프트 (reasoning 방지: "no explanation" 강조)
-            val systemPrompt = when (mode) {
-                "word" -> """
-                    You are a dictionary translator. For the given word:
-                    1. Translate to $langName
-                    2. Add part of speech
-                    3. Optionally 1 example
-                    Keep concise. NO explanations, NO reasoning.
-                """.trimIndent()
-                "sentence" -> """
-                    Translate to $langName. Output ONLY the translation.
-                    NO explanations, NO reasoning, NO quotes.
-                """.trimIndent()
-                "doc" -> """
-                    Translate the document to $langName.
-                    Preserve paragraphs. Output ONLY the translation.
-                    NO explanations, NO reasoning.
-                """.trimIndent()
-                else -> """
-                    Translate to $langName. Output ONLY the translation.
-                    NO explanations, NO reasoning.
-                """.trimIndent()
+            // ⭐ 강력한 언어 강제 시스템 프롬프트
+            val systemPrompt = """
+                You are a translation engine. Your ONLY job is translating text to $langName ($langCode).
+                
+                STRICT RULES:
+                1. Output language MUST be $langName. NEVER output in Chinese, English, or any other language unless asked.
+                2. Output ONLY the translation. No explanations, no quotes, no markdown, no reasoning.
+                3. Keep numbers, URLs, and proper nouns as-is.
+                4. If input is a single word, output the $langName translation with brief meaning.
+                
+                EXAMPLES:
+                - "cephalic" → "두부의, 머리와 관련된"
+                - "hello world" → "안녕 세상"
+                - "invoice" → "청구서, 송장"
+                
+                NOW translate to $langName. Remember: OUTPUT LANGUAGE = $langName.
+            """.trimIndent()
+
+            val userPrompt = when (mode) {
+                "word" -> "Word: \"$text\"\n→ $langName 번역 + 품사 (간결히)"
+                "sentence" -> "Sentence: \"$text\"\n→ $langName 자연스러운 번역"
+                "doc" -> "Document:\n$text\n→ $langName 전체 번역 (문단 유지)"
+                else -> text
             }
 
             val body = JSONObject().apply {
                 put("model", MODEL)
-                put("temperature", 0.2)
+                put("temperature", 0.1)   // 0.2 → 0.1 (더 결정적)
+                put("max_tokens", 2000)
                 put("messages", JSONArray().apply {
                     put(JSONObject().apply {
                         put("role", "system")
@@ -60,7 +61,7 @@ object GroqTranslator {
                     })
                     put(JSONObject().apply {
                         put("role", "user")
-                        put("content", text)
+                        put("content", userPrompt)
                     })
                 })
             }
@@ -68,7 +69,7 @@ object GroqTranslator {
             val conn = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 connectTimeout = 20000
-                readTimeout = 60000
+                readTimeout = 90000
                 doOutput = true
                 setRequestProperty("Authorization", "Bearer $apiKey")
                 setRequestProperty("Content-Type", "application/json")
@@ -83,9 +84,7 @@ object GroqTranslator {
             if (code !in 200..299) {
                 val msg = try {
                     JSONObject(response).getJSONObject("error").getString("message")
-                } catch (_: Exception) {
-                    response.take(300)
-                }
+                } catch (_: Exception) { response.take(300) }
                 return@withContext Result.failure(Exception("Groq 오류 $code: $msg"))
             }
 
@@ -94,6 +93,9 @@ object GroqTranslator {
                 .getJSONObject(0)
                 .getJSONObject("message")
                 .getString("content")
+                .trim()
+                // 혹시 reasoning 태그가 섞이면 제거
+                .replace(Regex("(?s)Thinking\\.\\.\\..*?done thinking\\.", RegexOption.IGNORE_CASE), "")
                 .trim()
 
             Result.success(content)

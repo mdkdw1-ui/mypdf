@@ -24,10 +24,14 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.github.barteksc.pdfviewer.PDFView
 import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle
 import com.mdkdw1.mypdf.*
+import com.mdkdw1.mypdf.PdfTextPicker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import com.mdkdw1.mypdf.GroqTranslator
+import com.mdkdw1.mypdf.DictionaryHelper
+import com.mdkdw1.mypdf.TtsHelper
+import com.mdkdw1.mypdf.ReadingPrefs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,6 +48,7 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
     var isHorizontal by remember { mutableStateOf(false) }
     var showEyeCareDialog by remember { mutableStateOf(false) }
     var showTranslateDialog by remember { mutableStateOf(false) }
+    var detectedText by remember { mutableStateOf("") }
     var showDictDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
@@ -98,15 +103,46 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
                         prefs.savePage(file.name, page)
                     }
                     .load()
-                // PDF 롱프레스 → 텍스트 선택 모드 안내
+                // PDF 롱프레스 → 좌표의 텍스트 자동 감지 → 번역 다이얼로그
+                var lastTapX = 0f
+                var lastTapY = 0f
+                view.setOnTouchListener { _, event ->
+                    if (event.action == android.view.MotionEvent.ACTION_DOWN) {
+                        lastTapX = event.x
+                        lastTapY = event.y
+                    }
+                    false
+                }
                 view.setOnLongClickListener {
-                    // PdfBox로 현재 페이지의 텍스트 중 첫 번째 단어 추출은 무거우니
-                    // 사용자가 "번역" 버튼을 누르도록 안내
-                    android.widget.Toast.makeText(
-                        context,
-                        "번역 아이콘(🌐)을 눌러 텍스트를 입력하세요",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
+                    scope.launch {
+                        val words = PdfTextPicker.extractWords(file, currentPage).getOrNull()
+                        if (words.isNullOrEmpty()) {
+                            android.widget.Toast.makeText(
+                                context, "텍스트를 찾을 수 없습니다",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                            return@launch
+                        }
+                        val pageW = 595f
+                        val pageH = 842f
+                        val found = PdfTextPicker.findWordAt(
+                            words, lastTapX, lastTapY,
+                            view.width, view.height, pageW, pageH
+                        )
+                        if (found != null) {
+                            detectedText = found.text
+                            showTranslateDialog = true
+                            android.widget.Toast.makeText(
+                                context, "감지: ${found.text}",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            android.widget.Toast.makeText(
+                                context, "텍스트가 감지되지 않았습니다",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
                     true
                 }
                 pdfViewRef = view
@@ -290,7 +326,11 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
     if (showTranslateDialog) {
         TranslateDialog(
             prefs = prefs,
-            onDismiss = { showTranslateDialog = false }
+            initialText = detectedText,
+            onDismiss = {
+                showTranslateDialog = false
+                detectedText = ""
+            }
         )
     }
 
@@ -315,10 +355,10 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
 
 // ─────────── 번역 다이얼로그 ───────────
 @Composable
-fun TranslateDialog(prefs: ReadingPrefs, onDismiss: () -> Unit) {
+fun TranslateDialog(prefs: ReadingPrefs, initialText: String = "", onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var input by remember { mutableStateOf("") }
+    var input by remember { mutableStateOf(initialText) }
     var output by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
