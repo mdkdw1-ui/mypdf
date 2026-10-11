@@ -17,6 +17,7 @@ import com.mdkdw1.mypdf.ui.EbookReaderScreen
 import com.mdkdw1.mypdf.PdfViewerActivity
 import android.content.Intent
 import com.mdkdw1.mypdf.ui.LibraryScreen
+import androidx.compose.ui.platform.LocalContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,15 +57,13 @@ fun AppNavHost() {
     val nav = rememberNavController()
     NavHost(navController = nav, startDestination = "library") {
         composable("library") {
+            val ctx = LocalContext.current
             LibraryScreen(
                 onOpenReader = { path ->
-                    val intent = Intent(
-                        this@MainActivity,
-                        PdfViewerActivity::class.java
-                    ).apply {
+                    val intent = Intent(ctx, PdfViewerActivity::class.java).apply {
                         putExtra(PdfViewerActivity.EXTRA_PATH, path)
                     }
-                    startActivity(intent)
+                    ctx.startActivity(intent)
                 }
             )
         }

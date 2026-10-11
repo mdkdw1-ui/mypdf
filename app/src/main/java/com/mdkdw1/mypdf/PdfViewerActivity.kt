@@ -9,10 +9,14 @@ import android.view.WindowManager
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.github.barteksc.pdfviewer.PDFView
 import com.github.barteksc.pdfviewer.listener.OnPageChangeListener
 import com.github.barteksc.pdfviewer.listener.OnLoadCompleteListener
 import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompleteListener {
@@ -44,24 +48,17 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
 
         prefs = ReadingPrefs(this)
 
-        // 화면 항상 켜짐
         if (prefs.keepScreenOn) {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
 
-        // ── 레이아웃 프로그래매틱 구성 ──
         val root = FrameLayout(this)
 
-        // PDFView
-        pdfView = PDFView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        }
+        // PDFView — XML inflate (attrs 필요)
+        pdfView = layoutInflater.inflate(R.layout.view_pdf, root, false) as PDFView
         root.addView(pdfView)
 
-        // 상단 툴바
+        // ── 상단 툴바 ──
         val toolbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(0xCC000000.toInt())
@@ -73,8 +70,9 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
             ).apply { gravity = Gravity.TOP }
         }
 
-        val btnClose = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+        val btnClose = Button(this).apply {
+            text = "✕"
+            setTextColor(0xFFFFFFFF.toInt())
             setBackgroundColor(0)
             setOnClickListener { finish() }
         }
@@ -88,25 +86,25 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
             setPadding(16, 0, 8, 0)
         }
 
-        val btnSelect = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_menu_edit)
+        val btnSelect = Button(this).apply {
+            text = "✏"
+            setTextColor(0xFFFFFFFF.toInt())
             setBackgroundColor(0)
-            contentDescription = "선택 모드"
             setOnClickListener {
                 selectionMode = !selectionMode
+                setBackgroundColor(if (selectionMode) 0x88FF6B9D.toInt() else 0)
                 Toast.makeText(
                     this@PdfViewerActivity,
                     if (selectionMode) "선택 모드 ON — 길게 눌러 번역" else "선택 모드 OFF",
                     Toast.LENGTH_SHORT
                 ).show()
-                updateSelectionButton(this)
             }
         }
 
-        val btnOverlay = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_menu_view)
+        val btnOverlay = Button(this).apply {
+            text = "🎨"
+            setTextColor(0xFFFFFFFF.toInt())
             setBackgroundColor(0)
-            contentDescription = "오버레이 번역"
             setOnClickListener {
                 startActivity(Intent(this@PdfViewerActivity, OcrOverlayActivity::class.java).apply {
                     putExtra("pdf_path", file.absolutePath)
@@ -115,10 +113,10 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
             }
         }
 
-        val btnSettings = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_menu_preferences)
+        val btnSettings = Button(this).apply {
+            text = "⚙"
+            setTextColor(0xFFFFFFFF.toInt())
             setBackgroundColor(0)
-            contentDescription = "설정"
             setOnClickListener {
                 startActivity(Intent(this@PdfViewerActivity, LogActivity::class.java))
             }
@@ -131,7 +129,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         toolbar.addView(btnSettings)
         root.addView(toolbar)
 
-        // 하단 페이지 바
+        // ── 하단 바 ──
         val bottomBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(0xCC000000.toInt())
@@ -171,10 +169,9 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
 
         setContentView(root)
 
-        // ── PDFView 초기화 (핵심!) ──
         loadPdf()
 
-        // ── 롱프레스 리스너 ──
+        // 롱프레스 → 번역 (선택 모드일 때)
         pdfView.setOnLongClickListener {
             if (selectionMode) {
                 handleLongPress()
@@ -182,16 +179,16 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
             } else false
         }
 
-        // 터치 좌표만 기록 (핀치/스크롤은 PDFView가 처리)
+        // 좌표 추적 (핀치/스크롤은 PDFView가 처리)
         pdfView.setOnTouchListener { _, event ->
             if (event.action == android.view.MotionEvent.ACTION_DOWN) {
                 lastTapX = event.x
                 lastTapY = event.y
             }
-            false  // ⭐ 이벤트 계속 전달 → PDFView가 핀치/스크롤 처리
+            false
         }
 
-        // 툴바 토글 (PDFView 클릭 시)
+        // 툴바 토글
         pdfView.setOnClickListener {
             toolbarVisible = !toolbarVisible
             val v = if (toolbarVisible) View.VISIBLE else View.GONE
@@ -200,19 +197,13 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         }
     }
 
-    private fun updateSelectionButton(btn: ImageButton) {
-        btn.setBackgroundColor(
-            if (selectionMode) 0x88FF6B9D.toInt() else 0
-        )
-    }
-
     private fun loadPdf() {
         tvFileName.text = file.name
 
         pdfView.fromFile(file)
             .enableSwipe(true)
-            .swipeHorizontal(false)          // 세로 스크롤
-            .enableDoubletap(true)           // 더블탭 줌
+            .swipeHorizontal(false)
+            .enableDoubletap(true)
             .enableAntialiasing(true)
             .spacing(10)
             .defaultPage(prefs.getPage(file.name))
@@ -235,22 +226,23 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
 
         Toast.makeText(this, "텍스트 감지 중...", Toast.LENGTH_SHORT).show()
 
-        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-            val words = PdfTextPicker.extractWords(this@PdfViewerActivity, file, currentPage).getOrNull()
+        val tapX = lastTapX
+        val tapY = lastTapY
+        val viewW = pdfView.width
+        val viewH = pdfView.height
+        val page = currentPage
+
+        lifecycleScope.launch {
+            val words = withContext(Dispatchers.IO) {
+                PdfTextPicker.extractWords(this@PdfViewerActivity, file, page).getOrNull()
+            }
             if (words.isNullOrEmpty()) {
                 Toast.makeText(this@PdfViewerActivity, "텍스트 없음", Toast.LENGTH_SHORT).show()
                 return@launch
             }
 
-            // PDF 뷰 크기 + 페이지 크기로 매칭
-            val pageW = pdfView.document?.pages?.getOrNull(currentPage)?.let {
-                // 페이지 크기는 pt 단위, PDFView는 픽셀 단위
-                595f  // A4 기본값 (필요시 실제 크기)
-            } ?: 595f
-
             val found = PdfTextPicker.findWordAt(
-                words, lastTapX, lastTapY,
-                pdfView.width, pdfView.height, pageW, 842f
+                words, tapX, tapY, viewW, viewH, 595f, 842f
             )
 
             if (found != null) {
@@ -302,9 +294,11 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
             .setPositiveButton("번역") { _, _ ->
                 val apiKey = prefs.groqApiKey ?: return@setPositiveButton
                 output.text = "번역 중..."
-                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                    val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        GroqTranslator.translate(apiKey, input.text.toString(), prefs.targetLang, "auto")
+                lifecycleScope.launch {
+                    val result = withContext(Dispatchers.IO) {
+                        GroqTranslator.translate(
+                            apiKey, input.text.toString(), prefs.targetLang, "auto"
+                        )
                     }
                     result.fold(
                         onSuccess = { output.text = it },

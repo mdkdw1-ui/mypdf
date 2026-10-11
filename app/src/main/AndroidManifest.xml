@@ -69,6 +69,13 @@
             android:exported="false"
             android:label="오버레이 번역"
             android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".PdfViewerActivity"
+            android:exported="false"
+            android:label="PDF 뷰어"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
     </application>
 
     <queries>
