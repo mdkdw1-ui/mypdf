@@ -161,7 +161,7 @@ class MenuGridAdapter(
             text = item.label
             textSize = 10f
             gravity = Gravity.CENTER
-            setTextColor(if (item.isDanger) 0xFFE53935.toInt() else 0xFF333333.toInt())
+            setTextColor(if (item.isDanger) 0xFFEF5350.toInt() else 0xFFFFFFFF.toInt())
             setPadding(0, 6, 0, 0)
             maxLines = 2
         }

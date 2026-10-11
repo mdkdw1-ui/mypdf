@@ -66,7 +66,7 @@ class PdfPagePreviewActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             // ⭐ 핀치 초점 정상화
-            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            // PhotoView가 자체 Matrix로 처리 — scaleType 명시 안 함
             setZoomable(true)
             // 더블탭 배율
             minimumScale = 1f
