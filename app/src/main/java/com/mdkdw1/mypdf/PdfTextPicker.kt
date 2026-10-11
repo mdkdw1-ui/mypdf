@@ -128,7 +128,7 @@ object PdfTextPicker {
             val cy = w.y + w.height / 2
             val dx = cx - pdfX
             val dy = cy - pdfY
-            kotlin.math.sqrt(dx * dx + dy * dy) < 40f
+            kotlin.math.sqrt(dx * dx + dy * dy) < 80f
         }
     }
 }

@@ -39,12 +39,44 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
     private var lastTapX = 0f
     private var lastTapY = 0f
 
-    // ⭐ PDFView 커스텀: 터치 좌표 기록 + 이벤트 통과
+    // ⭐ PDFView 커스텀: 롱프레스 자체 감지 (스크롤 컨테이너 문제 회피)
     private inner class RecordingPdfView(context: android.content.Context) : PDFView(context, null) {
+        private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        private var longPressRunnable: Runnable? = null
+        private var downX = 0f
+        private var downY = 0f
+        private var longPressTriggered = false
+
         override fun onTouchEvent(event: MotionEvent): Boolean {
-            if (event.action == MotionEvent.ACTION_DOWN) {
-                lastTapX = event.x
-                lastTapY = event.y
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastTapX = event.x
+                    lastTapY = event.y
+                    downX = event.x
+                    downY = event.y
+                    longPressTriggered = false
+
+                    if (selectionMode) {
+                        longPressRunnable = Runnable {
+                            longPressTriggered = true
+                            handleLongPress()
+                        }
+                        handler.postDelayed(longPressRunnable!!, 600L)
+                    }
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = kotlin.math.abs(event.x - downX)
+                    val dy = kotlin.math.abs(event.y - downY)
+                    if (dx > 20f || dy > 20f) {
+                        // 움직임 감지 → 롱프레스 취소
+                        longPressRunnable?.let { handler.removeCallbacks(it) }
+                        longPressRunnable = null
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    longPressRunnable?.let { handler.removeCallbacks(it) }
+                    longPressRunnable = null
+                }
             }
             return super.onTouchEvent(event)
         }
@@ -183,13 +215,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         // ⭐ PDFView 초기화 (터치 설정 없음!)
         loadPdf()
 
-        // ⭐ 롱프레스만 PDFView에 설정 (clickListener 없이)
-        pdfView.setOnLongClickListener {
-            if (selectionMode) {
-                handleLongPress()
-                true
-            } else false
-        }
+        // 롱프레스는 RecordingPdfView 내부에서 처리 (외부 setOnLongClickListener 불필요)
     }
 
     private fun loadPdf() {
@@ -217,11 +243,11 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
     private fun handleLongPress() {
         val apiKey = prefs.groqApiKey
         if (apiKey.isNullOrBlank()) {
-            Toast.makeText(this, "설정에서 Groq API 키를 입력하세요", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "⚙ 설정에서 Groq API 키를 입력하세요", Toast.LENGTH_LONG).show()
             return
         }
 
-        Toast.makeText(this, "텍스트 감지 중...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "🔍 텍스트 감지 중...", Toast.LENGTH_SHORT).show()
 
         val tapX = lastTapX
         val tapY = lastTapY
@@ -229,23 +255,31 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         val viewH = pdfView.height
         val page = currentPage
 
+        android.util.Log.d("PdfViewer", "롱프레스: tapX=$tapX, tapY=$tapY, viewW=$viewW, viewH=$viewH, page=$page")
+
         lifecycleScope.launch {
             val words = withContext(Dispatchers.IO) {
                 PdfTextPicker.extractWords(this@PdfViewerActivity, file, page).getOrNull()
             }
+
             if (words.isNullOrEmpty()) {
-                Toast.makeText(this@PdfViewerActivity, "텍스트 없음", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@PdfViewerActivity,
+                    "❌ 텍스트 추출 실패 (스캔본이거나 빈 페이지)", Toast.LENGTH_LONG).show()
                 return@launch
             }
+
+            android.util.Log.d("PdfViewer", "추출된 단어 수: ${words.size}")
 
             val found = PdfTextPicker.findWordAt(
                 words, tapX, tapY, viewW, viewH, 595f, 842f
             )
 
             if (found != null) {
+                android.util.Log.d("PdfViewer", "감지: ${found.text}")
                 showTranslateDialog(found.text)
             } else {
-                Toast.makeText(this@PdfViewerActivity, "텍스트 감지 안 됨", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@PdfViewerActivity,
+                    "❌ 위치 매칭 실패 — 텍스트 근처를 다시 눌러보세요", Toast.LENGTH_LONG).show()
             }
         }
     }
