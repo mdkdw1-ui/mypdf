@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import java.io.File
+import com.mdkdw1.mypdf.PdfEditor
 
 class VisionTranslateActivity : AppCompatActivity() {
 
