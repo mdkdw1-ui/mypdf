@@ -1,13 +1,9 @@
 package com.mdkdw1.mypdf
 
-import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
-import android.view.Gravity
-import android.view.View
-import android.view.ViewGroup
-import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -25,44 +21,38 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
-import com.mdkdw1.mypdf.PdfEditor
 
-class VisionTranslateActivity : AppCompatActivity() {
-
+class VisionTranslateActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         val path = intent.getStringExtra("pdf_path") ?: run { finish(); return }
         val pageIndex = intent.getIntExtra("page_index", 0)
 
-        val composeView = ComposeView(this).apply {
-            setContent {
-                MaterialTheme(
-                    colorScheme = darkColorScheme(
-                        primary = Color(0xFFFF6B9D),
-                        background = Color(0xFF0D1117),
-                        surface = Color(0xFF161B22),
-                        onSurface = Color(0xFFF0F6FC),
-                        surfaceVariant = Color(0xFF21262D),
-                        onSurfaceVariant = Color(0xFF8B949E),
-                    )
-                ) {
-                    VisionTranslateScreen(
-                        pdfPath = path,
-                        initialPage = pageIndex,
-                        onBack = { finish() }
-                    )
-                }
+        setContent {
+            MaterialTheme(
+                colorScheme = darkColorScheme(
+                    primary = Color(0xFFFF6B9D),
+                    background = Color(0xFF0D1117),
+                    surface = Color(0xFF161B22),
+                    onSurface = Color(0xFFF0F6FC),
+                    surfaceVariant = Color(0xFF21262D),
+                    onSurfaceVariant = Color(0xFF8B949E),
+                )
+            ) {
+                VisionTranslateScreen(
+                    pdfPath = path,
+                    initialPage = pageIndex,
+                    onBack = { finish() }
+                )
             }
         }
-        setContentView(composeView)
     }
 }
 
@@ -82,19 +72,35 @@ fun VisionTranslateScreen(
     var pageBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var loadingPage by remember { mutableStateOf(true) }
     var translating by remember { mutableStateOf(false) }
+    var autoTranslate by remember { mutableStateOf(false) }  // ⭐ 자동 번역
+    var translatingTime by remember { mutableStateOf(0) }     // ⭐ 경과 시간
     var result by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var targetLang by remember { mutableStateOf(prefs.targetLang) }
-    var mode by remember { mutableStateOf("layout") }  // text_only, layout, summary
+    var mode by remember { mutableStateOf("layout") }
     var totalPages by remember { mutableStateOf(1) }
 
-    // 페이지 이미지 로드
+    // 페이지 로드
     LaunchedEffect(pageIndex) {
         loadingPage = true
         result = ""
         error = null
         pageBitmap = PdfPageCapture.renderPage(context, file, pageIndex, 1200)
         loadingPage = false
+
+        // ⭐ 자동 번역이 ON이면 페이지 바뀔 때 자동 실행
+        if (autoTranslate && pageBitmap != null) {
+            val apiKey = prefs.groqApiKey
+            if (!apiKey.isNullOrBlank()) {
+                translating = true
+                translatingTime = 0
+                val b64 = PdfPageCapture.toBase64Jpeg(pageBitmap!!)
+                val r = GroqVisionTranslator.translateImage(apiKey, b64, targetLang, mode)
+                translating = false
+                r.onSuccess { result = it }
+                    .onFailure { error = it.message }
+            }
+        }
     }
 
     // 총 페이지 수
@@ -102,13 +108,68 @@ fun VisionTranslateScreen(
         PdfEditor.getPageCount(file).onSuccess { totalPages = it }
     }
 
+    // ⭐ 경과 시간 타이머 (1초 간격)
+    LaunchedEffect(translating) {
+        if (translating) {
+            translatingTime = 0
+            while (translating) {
+                delay(1000)
+                translatingTime++
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("통번역 (Vision)", maxLines = 1) },
+                title = { Text("통번역 (Vision)") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로")
+                    }
+                },
+                actions = {
+                    // ⭐ 자동 번역 토글
+                    IconButton(onClick = {
+                        autoTranslate = !autoTranslate
+                        android.widget.Toast.makeText(
+                            context,
+                            if (autoTranslate) "자동 번역 ON" else "OFF",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }) {
+                        Icon(
+                            if (autoTranslate) Icons.Filled.Autorenew
+                            else Icons.Filled.Autorenew,
+                            "자동번역",
+                            tint = if (autoTranslate) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    // 수동 번역
+                    IconButton(
+                        onClick = {
+                            if (pageBitmap == null || translating) return@IconButton
+                            val apiKey = prefs.groqApiKey
+                            if (apiKey.isNullOrBlank()) {
+                                error = "설정에서 Groq API 키를 입력하세요"
+                                return@IconButton
+                            }
+                            translating = true
+                            error = null
+                            result = ""
+                            scope.launch {
+                                val b64 = PdfPageCapture.toBase64Jpeg(pageBitmap!!)
+                                val r = GroqVisionTranslator.translateImage(
+                                    apiKey, b64, targetLang, mode
+                                )
+                                translating = false
+                                r.onSuccess { result = it }
+                                    .onFailure { error = it.message }
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Filled.Translate, "번역")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -116,39 +177,6 @@ fun VisionTranslateScreen(
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
                 )
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    if (pageBitmap == null || translating) return@FloatingActionButton
-                    val apiKey = prefs.groqApiKey
-                    if (apiKey.isNullOrBlank()) {
-                        error = "설정에서 Groq API 키를 입력하세요"
-                        return@FloatingActionButton
-                    }
-                    translating = true
-                    error = null
-                    result = ""
-                    scope.launch {
-                        val b64 = PdfPageCapture.toBase64Jpeg(pageBitmap!!)
-                        val r = GroqVisionTranslator.translateImage(
-                            apiKey, b64, targetLang, mode
-                        )
-                        translating = false
-                        r.onSuccess { result = it }
-                            .onFailure { error = it.message }
-                    }
-                },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White
-            ) {
-                if (translating) CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = Color.White,
-                    strokeWidth = 2.dp
-                )
-                else Icon(Icons.Filled.Translate, "번역")
-            }
         }
     ) { padding ->
         Column(
@@ -157,7 +185,7 @@ fun VisionTranslateScreen(
                 .padding(padding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // ── 페이지 선택 바 ──
+            // 페이지 선택
             Surface(
                 color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxWidth()
@@ -182,7 +210,7 @@ fun VisionTranslateScreen(
                 }
             }
 
-            // ── 언어 선택 ──
+            // 언어 선택
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -205,7 +233,7 @@ fun VisionTranslateScreen(
                 }
             }
 
-            // ── 번역 모드 선택 ──
+            // 모드 선택
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -217,7 +245,7 @@ fun VisionTranslateScreen(
                     fontSize = 12.sp)
                 listOf(
                     "text_only" to "📝 텍스트만",
-                    "layout" to "📄 레이아웃 유지",
+                    "layout" to "📄 레이아웃",
                     "summary" to "📋 요약"
                 ).forEach { (code, label) ->
                     FilterChip(
@@ -229,9 +257,9 @@ fun VisionTranslateScreen(
                 }
             }
 
-            Divider(color = MaterialTheme.colorScheme.surfaceVariant)
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
 
-            // ── 컨텐츠 (페이지 이미지 + 번역 결과) ──
+            // 컨텐츠
             Row(modifier = Modifier.fillMaxSize()) {
                 // 좌: 페이지 이미지
                 Box(
@@ -245,11 +273,11 @@ fun VisionTranslateScreen(
                         loadingPage -> CircularProgressIndicator()
                         pageBitmap != null -> Image(
                             bitmap = pageBitmap!!.asImageBitmap(),
-                            contentDescription = "PDF 페이지",
+                            contentDescription = "PDF",
                             contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize().padding(4.dp)
                         )
-                        else -> Text("페이지 로드 실패",
+                        else -> Text("로드 실패",
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -269,8 +297,14 @@ fun VisionTranslateScreen(
                         ) {
                             CircularProgressIndicator()
                             Spacer(Modifier.height(12.dp))
-                            Text("Vision 번역 중...",
+                            Text("Vision 번역 중... (${translatingTime}초)",
                                 color = MaterialTheme.colorScheme.onSurface)
+                            if (translatingTime > 15) {
+                                Spacer(Modifier.height(8.dp))
+                                Text("이미지가 크면 시간이 걸립니다",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                         error != null -> Column(
                             modifier = Modifier.align(Alignment.Center).padding(16.dp),
@@ -308,7 +342,7 @@ fun VisionTranslateScreen(
                             Text("🌐 버튼을 눌러 번역",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(4.dp))
-                            Text("(이미지·표·손글씨까지 번역)",
+                            Text("(자동 번역: 우상단 🔄)",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }

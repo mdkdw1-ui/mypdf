@@ -15,12 +15,9 @@ object GroqVisionTranslator {
     private const val ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
     private const val MODEL = "qwen/qwen3.8-27b"
 
-    /**
-     * 이미지 통번역
-     * @param imageBase64 data:image/jpeg;base64,... 형식 아닌 순수 base64
-     * @param targetLang "ko", "en" 등
-     * @param mode "text_only" (텍스트만) / "layout" (레이아웃 유지) / "summary" (요약)
-     */
+    // ⭐ 무료 티어 한도 1000 OTPM → max_tokens를 안전하게 800으로
+    private const val MAX_TOKENS = 800
+
     suspend fun translateImage(
         apiKey: String,
         imageBase64: String,
@@ -32,21 +29,35 @@ object GroqVisionTranslator {
 
             val systemPrompt = when (mode) {
                 "text_only" -> """
-                    Extract all text from the image and translate to $langName.
-                    Output ONLY the translation as plain text.
-                    NO explanations, NO reasoning.
+                    Translate all visible text to $langName.
+                    Output ONLY the translation, no explanations.
+                    Be concise.
                 """.trimIndent()
                 "layout" -> """
-                    You are a document translator. Translate ALL content in the image to $langName.
-                    Preserve layout: tables as markdown tables, headers, paragraphs.
-                    Include text from images, diagrams, and handwriting.
-                    Output ONLY the translated content in $langName.
-                    NO explanations, NO reasoning.
+                    You are a document translator. Translate ALL visible content in the image to $langName.
+                    
+                    CRITICAL RULES:
+                    1. Preserve the EXACT layout structure:
+                       - Use markdown tables for tables: | col1 | col2 |
+                       - Use # for headings, ## for subheadings
+                       - Keep line breaks where they exist
+                       - Preserve bullet points and numbering
+                    2. Translate ALL text including:
+                       - Headers, footers, footnotes
+                       - Small print, legal text
+                       - Numbers stay as numbers
+                       - Currency symbols preserved
+                    3. Layout mapping:
+                       - If text is on the left → put it on the left
+                       - If it's a form → use a table
+                       - If it's a receipt/invoice → use structured layout
+                    
+                    Output ONLY the translated document in $langName.
+                    NO explanations, NO reasoning, NO preamble.
                 """.trimIndent()
                 "summary" -> """
-                    Analyze the image and provide a summary in $langName.
-                    Include: main topic, key numbers, key points (bullet list).
-                    Output ONLY in $langName.
+                    Summarize this document in $langName.
+                    Bullet points, key numbers. Concise.
                 """.trimIndent()
                 else -> "Translate to $langName."
             }
@@ -61,7 +72,7 @@ object GroqVisionTranslator {
                     put("content", JSONArray().apply {
                         put(JSONObject().apply {
                             put("type", "text")
-                            put("text", "Translate this document image to $langName.")
+                            put("text", "Translate this page to $langName.")
                         })
                         put(JSONObject().apply {
                             put("type", "image_url")
@@ -76,7 +87,7 @@ object GroqVisionTranslator {
             val body = JSONObject().apply {
                 put("model", MODEL)
                 put("temperature", 0.1)
-                put("max_tokens", 4000)
+                put("max_tokens", MAX_TOKENS)
                 put("messages", messages)
             }
 
@@ -99,7 +110,7 @@ object GroqVisionTranslator {
                 val msg = try {
                     JSONObject(response).getJSONObject("error").getString("message")
                 } catch (_: Exception) { response.take(400) }
-                return@withContext Result.failure(Exception("Groq Vision 오류 $code: $msg"))
+                return@withContext Result.failure(Exception("Groq Vision $code: $msg"))
             }
 
             val json = JSONObject(response)

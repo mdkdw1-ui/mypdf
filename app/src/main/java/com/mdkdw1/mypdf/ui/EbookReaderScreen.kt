@@ -93,51 +93,45 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
                         prefs.savePage(file.name, page)
                     }
                     .load()
-                pdfViewRef = view
-                view
-            },
-            update = { view ->
-                if (selectionMode) {
-                    view.setOnTouchListener { _, event ->
-                        if (event.action == android.view.MotionEvent.ACTION_DOWN) {
-                            lastTapX = event.x
-                            lastTapY = event.y
-                        }
-                        false
-                    }
-                    view.setOnLongClickListener {
+
+                // ⭐ 롱프레스 → 번역 (선택 모드일 때만)
+                view.setOnLongClickListener {
+                    if (selectionMode) {
                         scope.launch {
                             val words = PdfTextPicker.extractWords(
                                 context, file, currentPage
                             ).getOrNull()
-                            if (words.isNullOrEmpty()) {
-                                android.widget.Toast.makeText(
-                                    context, "텍스트 없음",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
-                                return@launch
-                            }
-                            val found = PdfTextPicker.findWordAt(
-                                words, lastTapX, lastTapY,
-                                view.width, view.height, 595f, 842f
-                            )
-                            if (found != null) {
-                                detectedText = found.text
-                                showTranslateDialog = true
-                            } else {
-                                android.widget.Toast.makeText(
-                                    context, "감지 안 됨",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
+                            if (!words.isNullOrEmpty()) {
+                                val found = PdfTextPicker.findWordAt(
+                                    words, lastTapX, lastTapY,
+                                    view.width, view.height, 595f, 842f
+                                )
+                                if (found != null) {
+                                    detectedText = found.text
+                                    showTranslateDialog = true
+                                } else {
+                                    android.widget.Toast.makeText(
+                                        context, "텍스트 없음",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             }
                         }
                         true
-                    }
-                } else {
-                    view.setOnTouchListener(null)
-                    view.setOnLongClickListener(null)
+                    } else false
                 }
+                view.setOnTouchListener { _, event ->
+                    if (event.action == android.view.MotionEvent.ACTION_DOWN) {
+                        lastTapX = event.x
+                        lastTapY = event.y
+                    }
+                    false  // PDFView에 터치 전달 (핀치 확대 유지)
+                }
+
+                pdfViewRef = view
+                view
             },
+
             modifier = Modifier.fillMaxSize()
         )
 

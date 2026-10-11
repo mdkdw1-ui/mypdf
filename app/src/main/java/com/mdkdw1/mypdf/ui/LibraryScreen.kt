@@ -32,6 +32,12 @@ import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import com.mdkdw1.mypdf.PdfThumbnail
+import android.graphics.Bitmap
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -204,21 +210,19 @@ fun LibraryScreen(onOpenReader: (String) -> Unit) {
 /** 아이콘식 리스트 아이템 */
 @Composable
 fun PdfIconRow(
-    file: File,
-    prefs: ReadingPrefs,
-    onClick: () -> Unit,
-    onRefresh: () -> Unit
+    file: File, prefs: ReadingPrefs,
+    onClick: () -> Unit, onRefresh: () -> Unit
 ) {
     val context = LocalContext.current
+    var thumbnail by remember { mutableStateOf<Bitmap?>(null) }
     val fav = prefs.isFavorite(file.name)
     val lastOpened = prefs.getLastOpened(file.name)
     val lastPage = prefs.getPage(file.name)
-    val dateStr = if (lastOpened > 0) {
+    val dateStr = if (lastOpened > 0)
         SimpleDateFormat("yy.MM.dd", Locale.getDefault()).format(Date(lastOpened))
-    } else "-"
+    else "-"
     val sizeMb = "%.1f MB".format(file.length() / 1024.0 / 1024.0)
 
-    // 파일명 해시 기반 색상
     val colors = listOf(
         Color(0xFFFF6B9D), Color(0xFF9C6BFF), Color(0xFF6BB8FF),
         Color(0xFF6BFFB8), Color(0xFFFFB86B), Color(0xFFFF6B6B)
@@ -227,112 +231,63 @@ fun PdfIconRow(
 
     var showMenu by remember { mutableStateOf(false) }
 
+    // 썸네일 로드
+    LaunchedEffect(file.absolutePath) {
+        thumbnail = PdfThumbnail.get(context, file, 200)
+    }
+
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = Modifier.fillMaxWidth()
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 아이콘 (색상 그라데이션 원형)
         Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Brush.linearGradient(listOf(cardColor, cardColor.copy(alpha = 0.7f)))),
+            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp))
+                .background(if (thumbnail == null)
+                    Brush.linearGradient(listOf(cardColor, cardColor.copy(alpha = 0.7f)))
+                    else Brush.linearGradient(listOf(Color(0xFFF5F5F5), Color(0xFFEEEEEE)))),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                Icons.Filled.PictureAsPdf,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(28.dp)
-            )
-            if (fav) {
-                Icon(
-                    Icons.Filled.Star,
+            if (thumbnail != null) {
+                Image(
+                    bitmap = thumbnail!!.asImageBitmap(),
                     contentDescription = null,
-                    tint = Color(0xFFFFD700),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(14.dp)
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
                 )
+            } else {
+                Icon(Icons.Filled.PictureAsPdf, null, tint = Color.White,
+                    modifier = Modifier.size(28.dp))
+            }
+            if (fav) {
+                Icon(Icons.Filled.Star, null, tint = Color(0xFFFFD700),
+                    modifier = Modifier.align(Alignment.TopEnd).size(14.dp))
             }
         }
-
         Spacer(Modifier.width(12.dp))
-
-        // 정보
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                file.nameWithoutExtension,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Text(file.nameWithoutExtension, fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(2.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(sizeMb, fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("  ·  ", fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(dateStr, fontSize = 11.sp,
+            Row {
+                Text("$sizeMb  ·  $dateStr", fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (lastPage > 0) {
-                    Text("  ·  ", fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("📖 ${lastPage + 1}p", fontSize = 11.sp,
-                        color = cardColor, fontWeight = FontWeight.Medium)
+                    Text("  ·  📖${lastPage + 1}p", fontSize = 11.sp, color = cardColor)
                 }
             }
         }
-
         IconButton(onClick = { showMenu = true }) {
             Icon(Icons.Filled.MoreVert, "메뉴", modifier = Modifier.size(20.dp))
         }
     }
 
-    HorizontalDivider(
-        modifier = Modifier.padding(start = 76.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
-    )
+    HorizontalDivider(modifier = Modifier.padding(start = 76.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant)
 
     if (showMenu) {
-        AlertDialog(
-            onDismissRequest = { showMenu = false },
-            title = { Text(file.name, fontSize = 14.sp) },
-            text = {
-                Column {
-                    MenuRow("⭐ 즐겨찾기 ${if (fav) "해제" else "추가"}") {
-                        prefs.toggleFavorite(file.name); onRefresh(); showMenu = false
-                    }
-                    MenuRow("🗑 삭제") {
-                        file.delete(); onRefresh(); showMenu = false
-                    }
-                    MenuRow("📤 공유") {
-                        try {
-                            val uri = androidx.core.content.FileProvider.getUriForFile(
-                                context, "${context.packageName}.fileprovider", file
-                            )
-                            val share = Intent(Intent.ACTION_SEND).apply {
-                                type = "application/pdf"
-                                putExtra(Intent.EXTRA_STREAM, uri)
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            }
-                            context.startActivity(Intent.createChooser(share, "PDF 공유"))
-                        } catch (e: Exception) {
-                            CrashLogger.e(context, "LIB", "공유 실패", e)
-                        }
-                        showMenu = false
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showMenu = false }) { Text("닫기") }
-            }
-        )
+        FileMenuDialog(file, prefs, showMenu, { showMenu = false }, onRefresh)
     }
 }
 
