@@ -970,22 +970,19 @@ class PdfEditorActivity : AppCompatActivity() {
         lifecycleScope.launch {
             Toast.makeText(this@PdfEditorActivity, "저장 중...", Toast.LENGTH_SHORT).show()
 
-            // ⭐ word.y는 좌상단 기준 → 좌하단 변환 필요
-            val pageHeight = 842f
+            // ⭐ 원본 텍스트로 정확 매칭 → 원본 폰트/위치 그대로
+            val result = withContext(Dispatchers.IO) {
+                PdfTextEditor.replaceByOriginal(
+                    context = this@PdfEditorActivity,
+                    file = file,
+                    pageIndex = originalIndex,
+                    originalText = word.text,
+                    newText = newText,
+                    bgColor = Color.WHITE
+                )
+            }
 
-            PdfTextEditor.replaceText(
-                context = this@PdfEditorActivity,
-                file = file,
-                pageIndex = originalIndex,
-                originalLeft = word.x,
-                originalBottom = pageHeight - word.y - word.height,  // ⭐ 변환
-                originalWidth = word.width,
-                originalHeight = word.height,
-                newText = newText,
-                fontSize = word.fontSize,
-                color = Color.BLACK,
-                bgColor = Color.WHITE
-            ).fold(
+            result.fold(
                 onSuccess = {
                     refreshThumb(originalIndex)
                     Toast.makeText(this@PdfEditorActivity,
