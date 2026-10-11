@@ -22,19 +22,34 @@ class ReadingPrefs(context: Context) {
     }
     fun isFavorite(fileName: String): Boolean = prefs.getBoolean("fav_$fileName", false)
 
-    var darkMode: Boolean
-        get() = prefs.getBoolean("dark_mode", false)
-        set(v) = prefs.edit().putBoolean("dark_mode", v).apply()
+    // ── 테마 모드: 0=일반, 1=세피아, 2=다크, 3=야간(블루라이트↓) ──
+    var themeMode: Int
+        get() = prefs.getInt("theme_mode", 0)
+        set(v) = prefs.edit().putInt("theme_mode", v).apply()
 
-    var ebookMode: Boolean
-        get() = prefs.getBoolean("ebook_mode", true)
-        set(v) = prefs.edit().putBoolean("ebook_mode", v).apply()
+    // ── 눈 건강 ──
+    var eyeCareEnabled: Boolean
+        get() = prefs.getBoolean("eye_care", false)
+        set(v) = prefs.edit().putBoolean("eye_care", v).apply()
+
+    var eyeCareIntervalMin: Int
+        get() = prefs.getInt("eye_care_interval", 20)
+        set(v) = prefs.edit().putInt("eye_care_interval", v).apply()
 
     var keepScreenOn: Boolean
         get() = prefs.getBoolean("keep_screen_on", true)
         set(v) = prefs.edit().putBoolean("keep_screen_on", v).apply()
 
-    var volumeKeyPage: Boolean
-        get() = prefs.getBoolean("volume_key_page", true)
-        set(v) = prefs.edit().putBoolean("volume_key_page", v).apply()
+    var fontSize: Int
+        get() = prefs.getInt("font_size", 18)
+        set(v) = prefs.edit().putInt("font_size", v).apply()
+
+    // ── Groq 번역 ──
+    var groqApiKey: String?
+        get() = prefs.getString("groq_api_key", null)
+        set(v) = prefs.edit().putString("groq_api_key", v).apply()
+
+    var targetLang: String
+        get() = prefs.getString("target_lang", "ko") ?: "ko"
+        set(v) = prefs.edit().putString("target_lang", v).apply()
 }
