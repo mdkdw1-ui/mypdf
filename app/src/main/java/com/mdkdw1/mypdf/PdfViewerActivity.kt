@@ -15,6 +15,8 @@ import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -147,6 +149,13 @@ class PdfViewerActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { gravity = Gravity.BOTTOM }
+        }
+
+        // ⭐ 시스템 네비게이션 바 높이만큼 하단 패딩 추가
+        ViewCompat.setOnApplyWindowInsetsListener(bottomBar) { v, insets ->
+            val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            v.setPadding(8, 16, 8, 16 + navBars.bottom)
+            insets
         }
 
         tvPageInfo = TextView(this).apply {
