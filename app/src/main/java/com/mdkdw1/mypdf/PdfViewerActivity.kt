@@ -43,8 +43,8 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
                     downY = event.y
                     longPressFired = false
 
-                    android.util.Log.d("PdfViewer",
-                        "DOWN selection=$selectionMode x=${event.x} y=${event.y}")
+                    CrashLogger.log(context,
+                        "PdfViewer", "DOWN selection=$selectionMode x=${event.x} y=${event.y}")
 
                     // ⭐ 선택 모드일 때만 롱프레스 타이머 시작
                     if (selectionMode) {
@@ -52,7 +52,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
                         longPressRunnable = Runnable {
                             if (!longPressFired) {
                                 longPressFired = true
-                                android.util.Log.d("PdfViewer", "⭐ LONG PRESS FIRED!")
+                                CrashLogger.log(context, "PdfViewer", "LONG PRESS FIRED!")
                                 handleLongPress()
                             }
                         }
@@ -325,7 +325,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         val scrollX = try { pdfView.currentXOffset } catch (e: Exception) { 0f }
         val scrollY = try { pdfView.currentYOffset } catch (e: Exception) { 0f }
 
-        android.util.Log.d("PdfViewer",
+        CrashLogger.log(this@PdfViewerActivity, "PdfViewer",
             "handleLongPress: tap=($tapX, $tapY) view=${viewW}x$viewH " +
             "page=${pageWidthPt}x$pageHeightPt zoom=$zoom scroll=($scrollX, $scrollY)")
 
@@ -340,9 +340,10 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
                 return@launch
             }
 
-            android.util.Log.d("PdfViewer", "추출 단어 수: ${words.size}")
+            CrashLogger.log(this@PdfViewerActivity, "PdfViewer", "추출 단어 수: ${words.size}")
 
             val found = PdfTextPicker.findWordAt(
+                context = this@PdfViewerActivity,
                 words = words,
                 tapX = tapX,
                 tapY = tapY,
@@ -356,7 +357,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
             )
 
             if (found != null) {
-                android.util.Log.d("PdfViewer", "감지: ${found.text}")
+                CrashLogger.log(this@PdfViewerActivity, "PdfViewer", "감지: ${found.text}")
                 showTranslateDialog(found.text)
             } else {
                 Toast.makeText(this@PdfViewerActivity,
