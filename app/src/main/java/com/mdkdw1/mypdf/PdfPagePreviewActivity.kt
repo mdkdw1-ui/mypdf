@@ -70,8 +70,6 @@ class PdfPagePreviewActivity : AppCompatActivity() {
             mediumScale = 2f
             maximumScale = 8f
             setBackgroundColor(Color.parseColor("#0D1117"))
-            // ⭐ 애니메이션
-            setAnimateOnUserGesture(false)  // 제스처 중 애니메이션 X (부드러움)
         }
         root.addView(photoView)
 

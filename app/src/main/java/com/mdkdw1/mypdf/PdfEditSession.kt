@@ -44,6 +44,22 @@ class PdfEditSession(
         }
     }
 
+    /**
+     * ⭐ 외부 편집 후 재로드 (PdfTextEditor/PdfAnnotation 사용 후 필수)
+     */
+    suspend fun reload(): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            document?.close()
+            document = PDDocument.load(sourceFile)
+            CrashLogger.log(context, "PdfEditSession",
+                "재로드: ${document?.numberOfPages} 페이지 (${sourceFile.length()} bytes)")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            CrashLogger.e(context, "PdfEditSession", "재로드 실패", e)
+            Result.failure(e)
+        }
+    }
+
     data class PageInfo(
         val originalIndex: Int,
         val rotation: Int,
