@@ -99,4 +99,5 @@ dependencies {
     // ⭐ ML Kit OCR (한국어 + 라틴)
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("com.google.mlkit:text-recognition-korean:16.0.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 }
