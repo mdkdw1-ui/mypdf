@@ -51,10 +51,16 @@ class PdfEditorActivity : AppCompatActivity() {
         val root = FrameLayout(this)
         root.setBackgroundColor(Color.parseColor("#1A1A1A"))
 
-        recyclerView = RecyclerView(this)
-        recyclerView.layoutManager = GridLayoutManager(this, 3)
-        recyclerView.setPadding(8, 8, 8, 8)
-        recyclerView.clipToPadding = false
+        recyclerView = RecyclerView(this).apply {
+            layoutManager = GridLayoutManager(this@PdfEditorActivity, 3)
+            setPadding(8, 8, 8, 8)
+            clipToPadding = false
+            // ⭐ 스크롤 성능 최적화
+            setHasFixedSize(true)
+            itemAnimator = null
+            setItemViewCacheSize(20)
+            isNestedScrollingEnabled = false
+        }
         recyclerView.layoutParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
@@ -64,13 +70,20 @@ class PdfEditorActivity : AppCompatActivity() {
         // 상단 툴바
         val toolbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(0xDD000000.toInt())
-            setPadding(8, 12, 8, 12)
+            setBackgroundColor(0xEE000000.toInt())
+            setPadding(8, 24, 8, 16)
             gravity = Gravity.CENTER_VERTICAL
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { gravity = Gravity.TOP }
+        }
+
+        // ⭐ 상단 WindowInsets (상태바 겹침 방지)
+        ViewCompat.setOnApplyWindowInsetsListener(toolbar) { v, insets ->
+            val statusBar = insets.getInsets(WindowInsetsCompat.Type.statusBars())
+            v.setPadding(8, 24 + statusBar.top, 8, 16)
+            insets
         }
 
         val btnClose = Button(this).apply {
@@ -90,25 +103,17 @@ class PdfEditorActivity : AppCompatActivity() {
             text = "📝 ${file.name}"
         }
 
-        val btnSave = Button(this).apply {
-            text = "💾"
-            textSize = 18f
-            setTextColor(0xFFFFFFFF.toInt())
-            setBackgroundColor(0)
-            setOnClickListener { saveDocument() }
-        }
-
         val btnMore = Button(this).apply {
             text = "⋮"
             textSize = 22f
             setTextColor(0xFFFFFFFF.toInt())
             setBackgroundColor(0)
+            setPadding(32, 16, 32, 16)
             setOnClickListener { showMoreMenu() }
         }
 
         toolbar.addView(btnClose)
         toolbar.addView(tvFileName)
-        toolbar.addView(btnSave)
         toolbar.addView(btnMore)
         root.addView(toolbar)
 
@@ -132,43 +137,54 @@ class PdfEditorActivity : AppCompatActivity() {
 
         tvPageCount = TextView(this).apply {
             setTextColor(0xFFFFFFFF.toInt())
-            textSize = 13f
+            textSize = 11f
             gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            text = "로딩 중..."
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.5f)
+            text = "로딩..."
         }
 
         val btnAddBlank = Button(this).apply {
             text = "➕"
-            textSize = 20f
+            textSize = 22f
             setTextColor(0xFFFFFFFF.toInt())
             setBackgroundColor(0)
-            setPadding(40, 20, 40, 20)
+            setPadding(40, 30, 40, 30)
             setOnClickListener { addBlankPage() }
         }
 
         val btnAnnotate = Button(this).apply {
             text = "🖍"
-            textSize = 20f
+            textSize = 22f
             setTextColor(0xFFFFFFFF.toInt())
             setBackgroundColor(0)
-            setPadding(40, 20, 40, 20)
+            setPadding(40, 30, 40, 30)
             setOnClickListener { showAnnotationMenu() }
         }
 
         val btnWatermark = Button(this).apply {
             text = "💧"
-            textSize = 20f
+            textSize = 22f
             setTextColor(0xFFFFFFFF.toInt())
             setBackgroundColor(0)
-            setPadding(40, 20, 40, 20)
+            setPadding(40, 30, 40, 30)
             setOnClickListener { showWatermarkDialog() }
+        }
+
+        // ⭐ 저장 버튼 (핑크 강조, 크게)
+        val btnSaveBottom = Button(this).apply {
+            text = "💾 저장"
+            textSize = 13f
+            setTextColor(0xFFFFFFFF.toInt())
+            setBackgroundColor(0xFFFF6B9D.toInt())
+            setPadding(48, 40, 48, 40)
+            setOnClickListener { saveDocument() }
         }
 
         bottomBar.addView(tvPageCount)
         bottomBar.addView(btnAddBlank)
         bottomBar.addView(btnAnnotate)
         bottomBar.addView(btnWatermark)
+        bottomBar.addView(btnSaveBottom)
         root.addView(bottomBar)
 
         setContentView(root)
@@ -210,11 +226,19 @@ class PdfEditorActivity : AppCompatActivity() {
         val pageInfos = session.getPageInfos()
         adapter = PdfEditPageAdapter(
             pages = pageInfos,
-            thumbnails = thumbnails
-        ) { originalIndex ->
-            currentPageIndex = pageInfos.indexOfFirst { it.originalIndex == originalIndex }
-            showPageMenu(originalIndex)
-        }
+            thumbnails = thumbnails,
+            onPageClick = { originalIndex ->
+                currentPageIndex = pageInfos.indexOfFirst { it.originalIndex == originalIndex }
+                showPageMenu(originalIndex)
+            },
+            onPageLongClick = { originalIndex ->
+                // ⭐ 롱프레스 → 큰 미리보기 (핀치)
+                val intent = Intent(this@PdfEditorActivity, PdfPagePreviewActivity::class.java)
+                intent.putExtra(PdfPagePreviewActivity.EXTRA_PATH, file.absolutePath)
+                intent.putExtra(PdfPagePreviewActivity.EXTRA_PAGE, originalIndex)
+                startActivity(intent)
+            }
+        )
         recyclerView.adapter = adapter
         tvPageCount.text = "${pageInfos.size} 페이지"
     }
@@ -254,33 +278,102 @@ class PdfEditorActivity : AppCompatActivity() {
         val currentPos = session.getPageInfos().indexOfFirst { it.originalIndex == originalIndex }
         if (currentPos < 0) return
 
+        // ⭐ 아이콘 그리드 메뉴
+        val items = listOf(
+            MenuItem("✏️", "텍스트 편집", 0),
+            MenuItem("➕", "텍스트 추가", 1),
+            MenuItem("🖍", "하이라이트", 2),
+            MenuItem("📌", "스티키 노트", 3),
+            MenuItem("⬜", "사각형", 4),
+            MenuItem("⭕", "원", 5),
+            MenuItem("🔄", "오른쪽 회전", 6),
+            MenuItem("🔄", "왼쪽 회전", 7),
+            MenuItem("⬅", "왼쪽 이동", 8),
+            MenuItem("➡", "오른쪽 이동", 9),
+            MenuItem("📄", "추출", 10),
+            MenuItem("🗑", "삭제", 11, isDanger = true)
+        )
+
+        val gridView = GridView(this).apply {
+            numColumns = 4
+            adapter = MenuGridAdapter(this@PdfEditorActivity, items)
+            setPadding(16, 16, 16, 16)
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("📄 페이지 ${currentPos + 1}")
+            .setView(gridView)
+            .setNegativeButton("닫기", null)
+            .create()
+
+        gridView.setOnItemClickListener { _, _, position, _ ->
+            dialog.dismiss()
+            val id = items[position].id
+            when (id) {
+                0 -> showTextEditDialog(originalIndex)
+                1 -> showAddTextDialog(originalIndex)
+                2 -> addHighlight(originalIndex)
+                3 -> addStickyNote(originalIndex)
+                4 -> addRectangle(originalIndex)
+                5 -> addCircle(originalIndex)
+                6 -> rotatePage(originalIndex, 90)
+                7 -> rotatePage(originalIndex, -90)
+                8 -> {
+                    if (currentPos > 0) movePage(currentPos, currentPos - 1)
+                    else Toast.makeText(this, "첫 페이지", Toast.LENGTH_SHORT).show()
+                }
+                9 -> {
+                    if (currentPos < session.pageCount - 1) movePage(currentPos, currentPos + 1)
+                    else Toast.makeText(this, "마지막 페이지", Toast.LENGTH_SHORT).show()
+                }
+                10 -> extractPage(originalIndex)
+                11 -> confirmDeletePage(originalIndex)
+            }
+        }
+        dialog.show()
+    }
+
+    private fun showPageMenuOld(originalIndex: Int) {
+        val currentPos = session.getPageInfos().indexOfFirst { it.originalIndex == originalIndex }
+        if (currentPos < 0) return
+
         val options = arrayOf(
             "✏️ 텍스트 편집 (기존 수정)",
             "➕ 텍스트 추가 (새로 쓰기)",
-            "🔄 오른쪽 90° 회전",
-            "🔄 왼쪽 90° 회전",
-            "🖍 하이라이트 (좌상단)",
-            "📌 스티키 노트",
-            "⬜ 사각형",
-            "⭕ 원",
+            "🖍 하이라이트 추가",
+            "📌 스티키 노트 추가",
+            "⬜ 사각형 그리기",
+            "⭕ 원 그리기",
+            "🔄 오른쪽으로 회전",
+            "🔄 왼쪽으로 회전",
+            "⬅ 왼쪽으로 이동",
+            "➡ 오른쪽으로 이동",
             "🗑 이 페이지 삭제",
             "📄 이 페이지만 추출"
         )
 
         AlertDialog.Builder(this)
-            .setTitle("페이지 ${currentPos + 1}")
+            .setTitle("페이지 ${currentPos + 1} 편집")
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> showTextEditDialog(originalIndex)
                     1 -> showAddTextDialog(originalIndex)
-                    2 -> rotatePage(originalIndex, 90)
-                    3 -> rotatePage(originalIndex, -90)
-                    4 -> addHighlight(originalIndex)
-                    5 -> addStickyNote(originalIndex)
-                    6 -> addRectangle(originalIndex)
-                    7 -> addCircle(originalIndex)
-                    8 -> confirmDeletePage(originalIndex)
-                    9 -> extractPage(originalIndex)
+                    2 -> addHighlight(originalIndex)
+                    3 -> addStickyNote(originalIndex)
+                    4 -> addRectangle(originalIndex)
+                    5 -> addCircle(originalIndex)
+                    6 -> rotatePage(originalIndex, 90)
+                    7 -> rotatePage(originalIndex, -90)
+                    8 -> {
+                        if (currentPos > 0) movePage(currentPos, currentPos - 1)
+                        else Toast.makeText(this, "첫 페이지", Toast.LENGTH_SHORT).show()
+                    }
+                    9 -> {
+                        if (currentPos < session.pageCount - 1) movePage(currentPos, currentPos + 1)
+                        else Toast.makeText(this, "마지막 페이지", Toast.LENGTH_SHORT).show()
+                    }
+                    10 -> confirmDeletePage(originalIndex)
+                    11 -> extractPage(originalIndex)
                 }
             }
             .setNegativeButton("취소", null)

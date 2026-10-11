@@ -83,6 +83,13 @@
             android:label="PDF 편집"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".PdfPagePreviewActivity"
+            android:exported="false"
+            android:label="페이지 미리보기"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
     </application>
 
     <queries>
