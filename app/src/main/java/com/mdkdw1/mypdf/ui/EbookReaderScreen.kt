@@ -76,7 +76,7 @@ fun EbookReaderScreen(path: String, onBack: () -> Unit) {
         AndroidView(
             factory = { ctx ->
                 val view = LayoutInflater.from(ctx)
-                    .inflate(R.layout.view_pdf, null, false) as PDFView
+                    .inflate(com.mdkdw1.mypdf.R.layout.view_pdf, null, false) as PDFView
                 view.setBackgroundColor(bgColor.value.toLong().let { AndroidColor.rgb(
                     ((it shr 16) and 0xFF).toInt(),
                     ((it shr 8) and 0xFF).toInt(),
