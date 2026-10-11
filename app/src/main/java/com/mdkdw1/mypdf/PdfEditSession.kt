@@ -12,8 +12,6 @@ import com.tom_roush.pdfbox.pdmodel.common.PDRectangle
 import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
 import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
 import com.tom_roush.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState
-import com.tom_roush.pdfbox.pdmodel.interactive.annotation.PDAnnotationHighlight
-import com.tom_roush.pdfbox.pdmodel.interactive.annotation.PDAnnotationText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -96,10 +94,31 @@ class PdfEditSession(
         try {
             val doc = document ?: return@withContext Result.failure(Exception("문서 없음"))
             if (from == to) return@withContext Result.success(Unit)
-            val pages = doc.pages
-            val moved = pages[from]
-            pages.remove(from)
-            pages.add(to, moved)
+            if (from < 0 || from >= doc.numberOfPages) return@withContext Result.failure(Exception("범위 초과"))
+            if (to < 0 || to >= doc.numberOfPages) return@withContext Result.failure(Exception("범위 초과"))
+
+            // 안전한 재배치: 새 문서에 순서대로 importPage
+            val order = (0 until doc.numberOfPages).toMutableList()
+            val moved = order.removeAt(from)
+            order.add(to, moved)
+
+            // 원본 페이지 복사
+            val pageCopies = order.map { doc.getPage(it) }
+            // 페이지를 새 문서로 옮기지 않고 순서만 참조 (PdfBox는 clone 사용)
+            val newDoc = com.tom_roush.pdfbox.pdmodel.PDDocument()
+            order.forEach { idx ->
+                newDoc.importPage(doc.getPage(idx))
+            }
+
+            // 원본의 어노테이션/주석 유지는 어려움 — 단순 페이지 순서만
+            // 원본 닫고 새 문서로 교체
+            newDoc.save(sourceFile)
+            newDoc.close()
+
+            // 재오픈
+            document?.close()
+            document = PDDocument.load(sourceFile)
+
             Result.success(Unit)
         } catch (e: Exception) { Result.failure(e) }
     }
@@ -130,45 +149,6 @@ class PdfEditSession(
     // ═══════════════════════════════════════════════
     // Phase 2: 주석 (하이라이트/스티키/도형)
     // ═══════════════════════════════════════════════
-
-    /** 하이라이트 (형광펜) — 좌하단 기준 PDF 좌표 */
-    suspend fun addHighlight(
-        pageIndex: Int, x: Float, y: Float, w: Float, h: Float,
-        color: Int = Color.YELLOW
-    ): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            val doc = document ?: return@withContext Result.failure(Exception("문서 없음"))
-            val page = doc.getPage(pageIndex)
-            val annot = PDAnnotationHighlight().apply {
-                rectangle = PDRectangle(x, y, w, h)
-                contents = "Highlight"
-                color = floatArrayOf(
-                    Color.red(color) / 255f,
-                    Color.green(color) / 255f,
-                    Color.blue(color) / 255f
-                )
-            }
-            page.annotations.add(annot)
-            Result.success(Unit)
-        } catch (e: Exception) { Result.failure(e) }
-    }
-
-    /** 스티키 노트 (메모) */
-    suspend fun addStickyNote(
-        pageIndex: Int, x: Float, y: Float, text: String
-    ): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            val doc = document ?: return@withContext Result.failure(Exception("문서 없음"))
-            val page = doc.getPage(pageIndex)
-            val annot = PDAnnotationText().apply {
-                rectangle = PDRectangle(x, y, 24f, 24f)
-                contents = text
-                open = true
-            }
-            page.annotations.add(annot)
-            Result.success(Unit)
-        } catch (e: Exception) { Result.failure(e) }
-    }
 
     /** 사각형 그리기 */
     suspend fun addRectangle(
@@ -291,8 +271,10 @@ class PdfEditSession(
                     val cos = Math.cos(rad).toFloat()
                     val sin = Math.sin(rad).toFloat()
                     cs.setTextMatrix(
-                        cos, sin, -sin, cos,
-                        size.width / 4, size.height / 3
+                        com.tom_roush.pdfbox.util.Matrix(
+                            cos, sin, -sin, cos,
+                            size.width / 4, size.height / 3
+                        )
                     )
                     cs.showText(text)
                     cs.endText()
@@ -393,20 +375,23 @@ class PdfEditSession(
     // 썸네일
     // ═══════════════════════════════════════════════
 
-    suspend fun renderThumbnail(pageIndex: Int, width: Int = 300): Bitmap? =
-        withContext(Dispatchers.IO) {
-            try {
-                val pfd = ParcelFileDescriptor.open(sourceFile, ParcelFileDescriptor.MODE_READ_ONLY)
-                PdfRenderer(pfd).use { renderer ->
-                    if (pageIndex < 0 || pageIndex >= renderer.pageCount) return@withContext null
-                    renderer.openPage(pageIndex).use { page ->
-                        val scale = width.toFloat() / page.width
-                        val h = (page.height * scale).toInt()
-                        val bmp = Bitmap.createBitmap(width, h, Bitmap.Config.ARGB_8888)
-                        bmp.eraseColor(Color.WHITE)
-                        page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+    suspend fun renderThumbnail(
+        pageIndex: Int,
+        width: Int = 300,
+        applyRotation: Boolean = true
+    ): Bitmap? = withContext(Dispatchers.IO) {
+        try {
+            val pfd = ParcelFileDescriptor.open(sourceFile, ParcelFileDescriptor.MODE_READ_ONLY)
+            PdfRenderer(pfd).use { renderer ->
+                if (pageIndex < 0 || pageIndex >= renderer.pageCount) return@withContext null
+                renderer.openPage(pageIndex).use { page ->
+                    val scale = width.toFloat() / page.width
+                    val h = (page.height * scale).toInt()
+                    val bmp = Bitmap.createBitmap(width, h, Bitmap.Config.ARGB_8888)
+                    bmp.eraseColor(Color.WHITE)
+                    page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
 
-                        // 회전 적용
+                    if (applyRotation) {
                         val pageInfo = getPageInfos().getOrNull(pageIndex)
                         val rot = pageInfo?.rotation ?: 0
                         if (rot != 0) {
@@ -416,10 +401,11 @@ class PdfEditSession(
                                 bmp, 0, 0, bmp.width, bmp.height, m, true
                             )
                         }
-                        return@withContext bmp
                     }
+                    return@withContext bmp
                 }
-                null
-            } catch (e: Exception) { null }
-        }
+            }
+            null
+        } catch (e: Exception) { null }
+    }
 }

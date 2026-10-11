@@ -13,10 +13,7 @@ import androidx.recyclerview.widget.RecyclerView
 class PdfEditPageAdapter(
     private val pages: List<PdfEditSession.PageInfo>,
     private val thumbnails: Map<Int, Bitmap?>,
-    private val selected: MutableSet<Int>,
-    private val selectionMode: Boolean,
-    private val onPageClick: (Int) -> Unit,
-    private val onPageLongClick: (Int) -> Unit
+    private val onPageClick: (Int) -> Unit
 ) : RecyclerView.Adapter<PdfEditPageAdapter.ViewHolder>() {
 
     class ViewHolder(val container: FrameLayout) : RecyclerView.ViewHolder(container)
@@ -55,19 +52,6 @@ class PdfEditPageAdapter(
             ).apply { gravity = Gravity.TOP or Gravity.START }
         }
         card.addView(tvNum)
-        val tvCheck = TextView(ctx).apply {
-            id = 3
-            setTextColor(Color.WHITE)
-            textSize = 18f
-            setBackgroundColor(0xCCFF6B9D.toInt())
-            setPadding(16, 8, 16, 8)
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { gravity = Gravity.TOP or Gravity.END }
-            visibility = View.GONE
-        }
-        card.addView(tvCheck)
         container.addView(card)
         return ViewHolder(container)
     }
@@ -77,7 +61,6 @@ class PdfEditPageAdapter(
         val card = holder.container.getChildAt(0) as FrameLayout
         val iv = card.findViewById<ImageView>(1)
         val tvNum = card.findViewById<TextView>(2)
-        val tvCheck = card.findViewById<TextView>(3)
 
         val thumb = thumbnails[page.originalIndex]
         if (thumb != null) iv.setImageBitmap(thumb)
@@ -89,23 +72,8 @@ class PdfEditPageAdapter(
         tvNum.text = if (page.rotation != 0) "${position + 1}  ↻${page.rotation}°"
                      else "${position + 1}"
 
-        if (selectionMode) {
-            if (selected.contains(page.originalIndex)) {
-                tvCheck.text = "✓"
-                tvCheck.visibility = View.VISIBLE
-                card.setBackgroundColor(Color.parseColor("#88FF6B9D"))
-            } else {
-                tvCheck.visibility = View.GONE
-                card.setBackgroundColor(Color.WHITE)
-            }
-        } else {
-            tvCheck.visibility = View.GONE
-            card.setBackgroundColor(Color.WHITE)
-        }
-
-        holder.container.setOnClickListener { onPageClick(page.originalIndex) }
-        holder.container.setOnLongClickListener {
-            onPageLongClick(page.originalIndex); true
+        holder.container.setOnClickListener {
+            onPageClick(page.originalIndex)
         }
     }
 

@@ -210,12 +210,11 @@ class PdfEditorActivity : AppCompatActivity() {
         val pageInfos = session.getPageInfos()
         adapter = PdfEditPageAdapter(
             pages = pageInfos,
-            thumbnails = thumbnails,
-            onPageClick = { originalIndex ->
-                currentPageIndex = pageInfos.indexOfFirst { it.originalIndex == originalIndex }
-                showPageMenu(originalIndex)
-            }
-        )
+            thumbnails = thumbnails
+        ) { originalIndex ->
+            currentPageIndex = pageInfos.indexOfFirst { it.originalIndex == originalIndex }
+            showPageMenu(originalIndex)
+        }
         recyclerView.adapter = adapter
         tvPageCount.text = "${pageInfos.size} 페이지"
     }
@@ -577,7 +576,10 @@ class PdfEditorActivity : AppCompatActivity() {
                 checked[which] = isChecked
             }
             .setPositiveButton("추출") { _, _ ->
-                val selected = checked.mapIndexedNotNull { i, c -> if (c) i else null }
+                val selected = mutableListOf<Int>()
+                for (i in checked.indices) {
+                    if (checked[i]) selected.add(i)
+                }
                 if (selected.isEmpty()) {
                     Toast.makeText(this, "페이지를 선택하세요", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
