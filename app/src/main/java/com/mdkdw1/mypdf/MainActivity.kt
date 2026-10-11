@@ -9,11 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalView
-import androidx.core.view.WindowCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -27,13 +23,23 @@ class MainActivity : ComponentActivity() {
         setContent {
             val darkTheme = isSystemInDarkTheme()
             val colors = if (darkTheme) darkColorScheme(
-                primary = Color(0xFFFFB6D9),
+                primary = Color(0xFFFF6B9D),      // 핑크 포인트
+                onPrimary = Color.White,
+                secondary = Color(0xFFB794F6),
                 background = Color(0xFF121212),
                 surface = Color(0xFF1E1E1E),
+                onSurface = Color(0xFFE0E0E0),
+                surfaceVariant = Color(0xFF2A2A2A),
+                onSurfaceVariant = Color(0xFFAAAAAA),
             ) else lightColorScheme(
-                primary = Color(0xFFD6336C),
-                background = Color(0xFFFFF5F8),
+                primary = Color(0xFFE91E63),      // 진한 핑크
+                onPrimary = Color.White,
+                secondary = Color(0xFF9C27B0),
+                background = Color(0xFFFFF5F8),   // 연한 핑크 배경
                 surface = Color.White,
+                onSurface = Color(0xFF1A1A1A),
+                surfaceVariant = Color(0xFFF5F0F5),
+                onSurfaceVariant = Color(0xFF666666),
             )
 
             MaterialTheme(colorScheme = colors) {
@@ -49,11 +55,16 @@ fun AppNavHost() {
     NavHost(navController = nav, startDestination = "library") {
         composable("library") {
             LibraryScreen(
-                onOpenReader = { path -> nav.navigate("reader?path=$path") }
+                onOpenReader = { path ->
+                    // 경로에 슬래시가 있으면 URL 인코딩
+                    val encoded = java.net.URLEncoder.encode(path, "UTF-8")
+                    nav.navigate("reader?path=$encoded")
+                }
             )
         }
         composable("reader?path={path}") { back ->
-            val path = back.arguments?.getString("path") ?: return@composable
+            val encoded = back.arguments?.getString("path") ?: return@composable
+            val path = java.net.URLDecoder.decode(encoded, "UTF-8")
             EbookReaderScreen(
                 path = path,
                 onBack = { nav.popBackStack() }
