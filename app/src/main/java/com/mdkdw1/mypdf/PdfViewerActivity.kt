@@ -2,6 +2,8 @@ package com.mdkdw1.mypdf
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -29,6 +31,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
     private lateinit var pdfView: PDFView
     private lateinit var tvPageInfo: TextView
     private lateinit var tvFileName: TextView
+    private lateinit var btnSelect: Button
     private lateinit var prefs: ReadingPrefs
     private lateinit var file: File
 
@@ -38,46 +41,6 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
 
     private var lastTapX = 0f
     private var lastTapY = 0f
-
-    // ⭐ PDFView 커스텀: GestureDetector로 롱프레스 감지 (가장 안정적)
-    private inner class RecordingPdfView(context: android.content.Context) : PDFView(context, null) {
-        private val gestureDetector = android.view.GestureDetector(
-            context,
-            object : android.view.GestureDetector.SimpleOnGestureListener() {
-                override fun onDown(e: android.view.MotionEvent): Boolean {
-                    lastTapX = e.x
-                    lastTapY = e.y
-                    return true
-                }
-
-                override fun onLongPress(e: android.view.MotionEvent) {
-                    android.util.Log.d("PdfViewer", "onLongPress 감지! selectionMode=$selectionMode")
-                    if (selectionMode) {
-                        lastTapX = e.x
-                        lastTapY = e.y
-                        handleLongPress()
-                    }
-                }
-
-                override fun onSingleTapUp(e: android.view.MotionEvent): Boolean {
-                    // 툴바 토글 등 (선택)
-                    return false
-                }
-            }
-        )
-
-        override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
-            // 좌표 기록
-            if (event.action == android.view.MotionEvent.ACTION_DOWN) {
-                lastTapX = event.x
-                lastTapY = event.y
-            }
-            // GestureDetector에 이벤트 전달
-            gestureDetector.onTouchEvent(event)
-            // PDFView 자체 처리도 계속
-            return super.onTouchEvent(event)
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,19 +55,27 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
 
-        // ── 루트 레이아웃 ──
+        // ── 루트 ──
         val root = FrameLayout(this)
 
-        // ⭐ PDFView — 커스텀 RecordingPdfView 사용
-        pdfView = RecordingPdfView(this)
-        val pdfLp = FrameLayout.LayoutParams(
+        // ── PDFView (XML inflate) ──
+        pdfView = layoutInflater.inflate(R.layout.view_pdf, root, false) as PDFView
+        pdfView.layoutParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
-        pdfView.layoutParams = pdfLp
         root.addView(pdfView)
 
-        // ── 상단 툴바 ──
+        // ⭐ 투명 오버레이 (롱프레스 전용) — 모든 터치는 PDFView로 통과
+        val touchOverlay = View(this)
+        touchOverlay.layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        touchOverlay.setBackgroundColor(0)  // 완전 투명
+        root.addView(touchOverlay)
+
+        // ── 상단 툴바 (최소: 닫기 + 파일명 + 설정) ──
         val toolbar = LinearLayout(this)
         toolbar.orientation = LinearLayout.HORIZONTAL
         toolbar.setBackgroundColor(0xCC000000.toInt())
@@ -131,31 +102,6 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         tvFileName.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         tvFileName.setPadding(16, 0, 8, 0)
 
-        val btnSelect = Button(this)
-        btnSelect.text = "✏"
-        btnSelect.setTextColor(0xFFFFFFFF.toInt())
-        btnSelect.setBackgroundColor(0)
-        btnSelect.setOnClickListener {
-            selectionMode = !selectionMode
-            btnSelect.setBackgroundColor(if (selectionMode) 0x88FF6B9D.toInt() else 0)
-            Toast.makeText(
-                this@PdfViewerActivity,
-                if (selectionMode) "선택 모드 ON — 길게 눌러 번역" else "선택 모드 OFF",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-
-        val btnOverlay = Button(this)
-        btnOverlay.text = "🎨"
-        btnOverlay.setTextColor(0xFFFFFFFF.toInt())
-        btnOverlay.setBackgroundColor(0)
-        btnOverlay.setOnClickListener {
-            val intent = Intent(this@PdfViewerActivity, OcrOverlayActivity::class.java)
-            intent.putExtra("pdf_path", file.absolutePath)
-            intent.putExtra("page_index", currentPage)
-            startActivity(intent)
-        }
-
         val btnSettings = Button(this)
         btnSettings.text = "⚙"
         btnSettings.setTextColor(0xFFFFFFFF.toInt())
@@ -166,17 +112,15 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
 
         toolbar.addView(btnClose)
         toolbar.addView(tvFileName)
-        toolbar.addView(btnSelect)
-        toolbar.addView(btnOverlay)
         toolbar.addView(btnSettings)
         root.addView(toolbar)
 
-        // ── 하단 바 ──
+        // ── 하단 바 (모든 액션: 이전/페이지/다음/연필/팔레트) ──
         val bottomBar = LinearLayout(this)
         bottomBar.orientation = LinearLayout.HORIZONTAL
-        bottomBar.setBackgroundColor(0xCC000000.toInt())
-        bottomBar.setPadding(16, 12, 16, 12)
-        bottomBar.gravity = Gravity.CENTER
+        bottomBar.setBackgroundColor(0xDD000000.toInt())
+        bottomBar.setPadding(8, 12, 8, 12)
+        bottomBar.gravity = Gravity.CENTER_VERTICAL
         val bottomLp = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
@@ -184,54 +128,142 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         bottomLp.gravity = Gravity.BOTTOM
         bottomBar.layoutParams = bottomLp
 
+        // 이전
         val btnPrev = Button(this)
         btnPrev.text = "◀"
+        btnPrev.setTextColor(0xFFFFFFFF.toInt())
+        btnPrev.setBackgroundColor(0)
         btnPrev.setOnClickListener {
             if (currentPage > 0) pdfView.jumpTo(currentPage - 1)
         }
 
+        // 페이지 정보
         tvPageInfo = TextView(this)
         tvPageInfo.setTextColor(0xFFFFFFFF.toInt())
-        tvPageInfo.textSize = 14f
-        tvPageInfo.setPadding(24, 0, 24, 0)
+        tvPageInfo.textSize = 13f
+        tvPageInfo.gravity = Gravity.CENTER
+        tvPageInfo.setPadding(8, 0, 8, 0)
+        tvPageInfo.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         tvPageInfo.text = "0 / 0"
 
+        // 다음
         val btnNext = Button(this)
         btnNext.text = "▶"
+        btnNext.setTextColor(0xFFFFFFFF.toInt())
+        btnNext.setBackgroundColor(0)
         btnNext.setOnClickListener {
             if (currentPage < pageCount - 1) pdfView.jumpTo(currentPage + 1)
+        }
+
+        // ⭐ 연필 (선택 모드) — 하단 우측
+        btnSelect = Button(this)
+        btnSelect.text = "✏"
+        btnSelect.textSize = 20f
+        btnSelect.setTextColor(0xFFFFFFFF.toInt())
+        btnSelect.setBackgroundColor(0)
+        btnSelect.setPadding(32, 16, 32, 16)
+        btnSelect.setOnClickListener {
+            selectionMode = !selectionMode
+            btnSelect.setBackgroundColor(if (selectionMode) 0xFFFF6B9D.toInt() else 0)
+            btnSelect.setTextColor(
+                if (selectionMode) 0xFFFFFFFF.toInt() else 0xFFFFFFFF.toInt()
+            )
+            Toast.makeText(
+                this@PdfViewerActivity,
+                if (selectionMode) "선택 모드 ON — 길게 눌러 번역" else "선택 모드 OFF",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
+        // ⭐ 팔레트 (오버레이 번역) — 하단 우측
+        val btnOverlay = Button(this)
+        btnOverlay.text = "🎨"
+        btnOverlay.textSize = 20f
+        btnOverlay.setTextColor(0xFFFFFFFF.toInt())
+        btnOverlay.setBackgroundColor(0)
+        btnOverlay.setPadding(32, 16, 32, 16)
+        btnOverlay.setOnClickListener {
+            val intent = Intent(this@PdfViewerActivity, OcrOverlayActivity::class.java)
+            intent.putExtra("pdf_path", file.absolutePath)
+            intent.putExtra("page_index", currentPage)
+            startActivity(intent)
         }
 
         bottomBar.addView(btnPrev)
         bottomBar.addView(tvPageInfo)
         bottomBar.addView(btnNext)
+        bottomBar.addView(btnSelect)
+        bottomBar.addView(btnOverlay)
         root.addView(bottomBar)
 
         setContentView(root)
 
-        // ⭐ PDFView 초기화 (터치 설정 없음!)
         loadPdf()
 
-        // 롱프레스는 RecordingPdfView 내부에서 처리 (외부 setOnLongClickListener 불필요)
+        // ⭐ 롱프레스 전용 처리 (오버레이에서)
+        setupLongPressDetector(touchOverlay)
+    }
+
+    /**
+     * ⭐ 투명 오버레이에 롱프레스 감지 (모든 터치는 PDFView로 통과)
+     */
+    private fun setupLongPressDetector(overlay: View) {
+        val handler = Handler(Looper.getMainLooper())
+        var longPressRunnable: Runnable? = null
+        var downX = 0f
+        var downY = 0f
+
+        overlay.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastTapX = event.x
+                    lastTapY = event.y
+                    downX = event.x
+                    downY = event.y
+
+                    android.util.Log.d("PdfViewer",
+                        "DOWN selectionMode=$selectionMode x=${event.x} y=${event.y}")
+
+                    if (selectionMode) {
+                        longPressRunnable = Runnable {
+                            android.util.Log.d("PdfViewer", "LONG PRESS TRIGGERED!")
+                            handleLongPress()
+                        }
+                        handler.postDelayed(longPressRunnable!!, 600L)
+                    }
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = kotlin.math.abs(event.x - downX)
+                    val dy = kotlin.math.abs(event.y - downY)
+                    if (dx > 15f || dy > 15f) {
+                        longPressRunnable?.let { handler.removeCallbacks(it) }
+                        longPressRunnable = null
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    longPressRunnable?.let { handler.removeCallbacks(it) }
+                    longPressRunnable = null
+                }
+            }
+            false  // ⭐ 모든 이벤트를 PDFView로 통과
+        }
     }
 
     private fun loadPdf() {
         tvFileName.text = file.name
 
-        // ⭐ 핀치 줌 + 스크롤 완전 활성
         pdfView.fromFile(file)
-            .enableSwipe(true)              // 스와이프 활성
-            .swipeHorizontal(false)         // 세로 스크롤
-            .enableDoubletap(true)          // 더블탭 줌
-            .enableAntialiasing(true)       // 안티앨리어싱
-            .spacing(10)                    // 페이지 간격
+            .enableSwipe(true)
+            .swipeHorizontal(false)
+            .enableDoubletap(true)
+            .enableAntialiasing(true)
+            .spacing(10)
             .defaultPage(prefs.getPage(file.name))
             .scrollHandle(DefaultScrollHandle(this))
             .onLoad(this)
             .onPageChange(this)
             .load()
 
-        // ⭐ 줌 범위
         pdfView.setMaxZoom(5.0f)
         pdfView.setMinZoom(0.5f)
         pdfView.useBestQuality(true)
@@ -252,7 +284,8 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         val viewH = pdfView.height
         val page = currentPage
 
-        android.util.Log.d("PdfViewer", "롱프레스: tapX=$tapX, tapY=$tapY, viewW=$viewW, viewH=$viewH, page=$page")
+        android.util.Log.d("PdfViewer",
+            "handleLongPress: tapX=$tapX tapY=$tapY viewW=$viewW viewH=$viewH page=$page")
 
         lifecycleScope.launch {
             val words = withContext(Dispatchers.IO) {
@@ -265,7 +298,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
                 return@launch
             }
 
-            android.util.Log.d("PdfViewer", "추출된 단어 수: ${words.size}")
+            android.util.Log.d("PdfViewer", "추출 단어 수: ${words.size}")
 
             val found = PdfTextPicker.findWordAt(
                 words, tapX, tapY, viewW, viewH, 595f, 842f
@@ -276,7 +309,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
                 showTranslateDialog(found.text)
             } else {
                 Toast.makeText(this@PdfViewerActivity,
-                    "❌ 위치 매칭 실패 — 텍스트 근처를 다시 눌러보세요", Toast.LENGTH_LONG).show()
+                    "❌ 위치 매칭 실패 — 텍스트 근처 다시 눌러보세요", Toast.LENGTH_LONG).show()
             }
         }
     }
