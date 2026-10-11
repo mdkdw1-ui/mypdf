@@ -311,49 +311,58 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         val tapY = lastTapY
         val page = currentPage
 
-        // ⭐ PDFView 상태 수집
-        val viewW = pdfView.width
-        val viewH = pdfView.height
-
-        val pageSize = try {
-            pdfView.getPageSize(page)
-        } catch (e: Exception) { null }
-        val pageWidthPt = pageSize?.width ?: 595f
-        val pageHeightPt = pageSize?.height ?: 842f
-
-        val zoom = try { pdfView.zoom } catch (e: Exception) { 1f }
-        val scrollX = try { pdfView.currentXOffset } catch (e: Exception) { 0f }
-        val scrollY = try { pdfView.currentYOffset } catch (e: Exception) { 0f }
-
-        CrashLogger.log(this@PdfViewerActivity, "PdfViewer",
-            "handleLongPress: tap=($tapX, $tapY) view=${viewW}x$viewH " +
-            "page=${pageWidthPt}x$pageHeightPt zoom=$zoom scroll=($scrollX, $scrollY)")
+        CrashLogger.log(this, "PdfViewer",
+            "handleLongPress: tap=(${"%.1f".format(tapX)}, ${"%.1f".format(tapY)}) page=$page")
 
         lifecycleScope.launch {
-            val words = withContext(Dispatchers.IO) {
-                PdfTextPicker.extractWords(this@PdfViewerActivity, file, page).getOrNull()
-            }
+            // ⭐ 페이지 pt 크기 + 단어 추출
+            val result = withContext(Dispatchers.IO) {
+                PdfTextPicker.extractWordsWithSize(this@PdfViewerActivity, file, page)
+            }.getOrNull()
 
-            if (words.isNullOrEmpty()) {
+            if (result == null || result.words.isEmpty()) {
                 Toast.makeText(this@PdfViewerActivity,
-                    "❌ 텍스트 추출 실패 (스캔본이거나 빈 페이지)", Toast.LENGTH_LONG).show()
+                    "❌ 텍스트 추출 실패", Toast.LENGTH_LONG).show()
                 return@launch
             }
 
-            CrashLogger.log(this@PdfViewerActivity, "PdfViewer", "추출 단어 수: ${words.size}")
+            // ⭐ PDFView의 페이지 오프셋 + 뷰 크기 얻기
+            val pageOffset = try {
+                pdfView.getPageOffset(page)
+            } catch (e: Exception) {
+                CrashLogger.e(this@PdfViewerActivity, "PdfViewer", "getPageOffset 실패", e)
+                null
+            }
+
+            val pageViewSize = try {
+                pdfView.getPageSize(page)
+            } catch (e: Exception) {
+                CrashLogger.e(this@PdfViewerActivity, "PdfViewer", "getPageSize 실패", e)
+                null
+            }
+
+            if (pageOffset == null || pageViewSize == null) {
+                Toast.makeText(this@PdfViewerActivity,
+                    "❌ 페이지 위치 정보 없음", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+
+            CrashLogger.log(this@PdfViewerActivity, "PdfViewer",
+                "pageOffset=(${"%.1f".format(pageOffset.x)}, ${"%.1f".format(pageOffset.y)}) " +
+                "pageViewSize=(${pageViewSize.width}x${pageViewSize.height}) " +
+                "pagePt=(${"%.1f".format(result.pageWidthPt)}x${"%.1f".format(result.pageHeightPt)})")
 
             val found = PdfTextPicker.findWordAt(
                 context = this@PdfViewerActivity,
-                words = words,
+                words = result.words,
                 tapX = tapX,
                 tapY = tapY,
-                viewWidth = viewW,
-                viewHeight = viewH,
-                pageWidthPt = pageWidthPt,
-                pageHeightPt = pageHeightPt,
-                zoom = zoom,
-                scrollX = scrollX,
-                scrollY = scrollY
+                pageOffsetX = pageOffset.x,
+                pageOffsetY = pageOffset.y,
+                pageViewWidth = pageViewSize.width.toFloat(),
+                pageViewHeight = pageViewSize.height.toFloat(),
+                pageWidthPt = result.pageWidthPt,
+                pageHeightPt = result.pageHeightPt
             )
 
             if (found != null) {
@@ -361,7 +370,7 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
                 showTranslateDialog(found.text)
             } else {
                 Toast.makeText(this@PdfViewerActivity,
-                    "❌ 위치 매칭 실패 — 텍스트 근처 다시 눌러보세요", Toast.LENGTH_LONG).show()
+                    "❌ 위치 매칭 실패", Toast.LENGTH_LONG).show()
             }
         }
     }
