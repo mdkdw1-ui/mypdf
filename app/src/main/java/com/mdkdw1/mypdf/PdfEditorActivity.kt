@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.mdkdw1.mypdf.PdfPageEditorActivity
 
 class PdfEditorActivity : AppCompatActivity() {
 
@@ -321,18 +322,19 @@ class PdfEditorActivity : AppCompatActivity() {
 
         // ⭐ 아이콘 그리드 메뉴
         val items = listOf(
-            MenuItem("✏️", "텍스트 편집", 0),
-            MenuItem("➕", "텍스트 추가", 1),
-            MenuItem("🖍", "하이라이트", 2),
-            MenuItem("📌", "스티키 노트", 3),
-            MenuItem("⬜", "사각형", 4),
-            MenuItem("⭕", "원", 5),
-            MenuItem("🔄", "오른쪽 회전", 6),
-            MenuItem("🔄", "왼쪽 회전", 7),
-            MenuItem("⬅", "왼쪽 이동", 8),
-            MenuItem("➡", "오른쪽 이동", 9),
-            MenuItem("📄", "추출", 10),
-            MenuItem("🗑", "삭제", 11, isDanger = true)
+            MenuItem("🎨", "그림판 편집", 0),
+            MenuItem("✏️", "텍스트 수정", 1),
+            MenuItem("➕", "텍스트 추가", 2),
+            MenuItem("🖍", "하이라이트", 3),
+            MenuItem("📌", "스티키 노트", 4),
+            MenuItem("⬜", "사각형", 5),
+            MenuItem("⭕", "원", 6),
+            MenuItem("🔄", "오른쪽 회전", 7),
+            MenuItem("🔄", "왼쪽 회전", 8),
+            MenuItem("⬅", "왼쪽 이동", 9),
+            MenuItem("➡", "오른쪽 이동", 10),
+            MenuItem("📄", "추출", 11),
+            MenuItem("🗑", "삭제", 12, isDanger = true)
         )
 
         val gridView = GridView(this).apply {
@@ -351,42 +353,55 @@ class PdfEditorActivity : AppCompatActivity() {
             dialog.dismiss()
             val id = items[position].id
             when (id) {
-                0 -> showTextEditDialog(originalIndex)
-                1 -> showAddTextDialog(originalIndex)
-                2 -> addHighlight(originalIndex)
-                3 -> addStickyNote(originalIndex)
-                4 -> addRectangle(originalIndex)
-                5 -> addCircle(originalIndex)
-                6 -> rotatePage(originalIndex, 90)
-                7 -> rotatePage(originalIndex, -90)
-                8 -> {
+                0 -> {
+                    // ⭐ 그림판 편집 (이미지 + 숨은 텍스트)
+                    val intent = Intent(this, PdfPageEditorActivity::class.java).apply {
+                        putExtra(PdfPageEditorActivity.EXTRA_PATH, file.absolutePath)
+                        putExtra(PdfPageEditorActivity.EXTRA_PAGE, originalIndex)
+                    }
+                    previewLauncher.launch(intent)
+                }
+                1 -> showTextEditDialog(originalIndex)
+                2 -> showAddTextDialog(originalIndex)
+                3 -> addHighlight(originalIndex)
+                4 -> addStickyNote(originalIndex)
+                5 -> addRectangle(originalIndex)
+                6 -> addCircle(originalIndex)
+                7 -> rotatePage(originalIndex, 90)
+                8 -> rotatePage(originalIndex, -90)
+                9 -> {
                     if (currentPos > 0) {
                         lifecycleScope.launch {
                             session.movePage(currentPos, currentPos - 1).fold(
                                 onSuccess = { refreshAdapter() },
-                                onFailure = { Toast.makeText(this@PdfEditorActivity,
-                                    "❌ ${it.message}", Toast.LENGTH_LONG).show() }
+                                onFailure = {
+                                    Toast.makeText(this@PdfEditorActivity,
+                                        "❌ ${it.message}", Toast.LENGTH_LONG).show()
+                                }
                             )
                         }
                     } else Toast.makeText(this, "첫 페이지", Toast.LENGTH_SHORT).show()
                 }
-                9 -> {
+                10 -> {
                     if (currentPos < session.pageCount - 1) {
                         lifecycleScope.launch {
                             session.movePage(currentPos, currentPos + 1).fold(
                                 onSuccess = { refreshAdapter() },
-                                onFailure = { Toast.makeText(this@PdfEditorActivity,
-                                    "❌ ${it.message}", Toast.LENGTH_LONG).show() }
+                                onFailure = {
+                                    Toast.makeText(this@PdfEditorActivity,
+                                        "❌ ${it.message}", Toast.LENGTH_LONG).show()
+                                }
                             )
                         }
                     } else Toast.makeText(this, "마지막 페이지", Toast.LENGTH_SHORT).show()
                 }
-                10 -> extractPage(originalIndex)
-                11 -> confirmDeletePage(originalIndex)
+                11 -> extractPage(originalIndex)
+                12 -> confirmDeletePage(originalIndex)
             }
         }
         dialog.show()
     }
+
 
     private fun showPageMenuOld(originalIndex: Int) {
         val currentPos = session.getPageInfos().indexOfFirst { it.originalIndex == originalIndex }

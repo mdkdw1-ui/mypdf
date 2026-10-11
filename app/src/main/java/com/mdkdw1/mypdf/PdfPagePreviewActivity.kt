@@ -4,11 +4,11 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.PointF
 import android.graphics.pdf.PdfRenderer
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
@@ -17,18 +17,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
-import com.github.barteksc.pdfviewer.PDFView
-import com.github.barteksc.pdfviewer.listener.OnPageChangeListener
-import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-/**
- * ⭐ mhiew PDFView 기반 미리보기 (핀치/스크롤 완벽)
- * 탭 감지는 투명 오버레이로 처리
- */
 class PdfPagePreviewActivity : AppCompatActivity() {
 
     companion object {
@@ -46,12 +39,10 @@ class PdfPagePreviewActivity : AppCompatActivity() {
         const val RESULT_PAGE_INDEX = "result_page_index"
     }
 
-    private lateinit var pdfView: PDFView
-    private lateinit var tvHint: TextView
+    private lateinit var zoomView: ZoomablePageView
     private var pageIndex = 0
     private var mode = MODE_PREVIEW
     private lateinit var file: File
-
     private var pageWidthPt = 595f
     private var pageHeightPt = 842f
 
@@ -64,33 +55,16 @@ class PdfPagePreviewActivity : AppCompatActivity() {
         file = File(path)
         if (!file.exists()) { finish(); return }
 
-        // 페이지 pt 크기 로드
-        lifecycleScope.launch {
-            val (w, h) = withContext(Dispatchers.IO) { getPageSizePt(file, pageIndex) }
-            pageWidthPt = w
-            pageHeightPt = h
-        }
-
         val root = FrameLayout(this)
         root.setBackgroundColor(Color.parseColor("#0D1117"))
 
-        // ⭐ mhiew PDFView (핀치/스크롤/더블탭 완벽)
-        pdfView = layoutInflater.inflate(R.layout.view_pdf, root, false) as PDFView
-        pdfView.setBackgroundColor(Color.parseColor("#0D1117"))
-        root.addView(pdfView)
-
-        // ⭐ 투명 오버레이 (탭만 감지, 스크롤/핀치는 통과)
-        val overlay = View(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            setBackgroundColor(0)
-            // 오버레이에 클릭만, 스크롤은 PDFView로
-            isClickable = (mode != MODE_PREVIEW)
-            isFocusable = false
-        }
-        root.addView(overlay)
+        // ⭐ 커스텀 ZoomablePageView
+        zoomView = ZoomablePageView(this)
+        zoomView.layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        root.addView(zoomView)
 
         // 상단 바
         val topBar = LinearLayout(this).apply {
@@ -122,7 +96,7 @@ class PdfPagePreviewActivity : AppCompatActivity() {
         }
 
         val tvTitle = TextView(this).apply {
-            text = "페이지 ${pageIndex + 1}"
+            text = "페이지 ${pageIndex + 1}  (${if (mode == MODE_PREVIEW) "보기" else "탭하세요"})"
             setTextColor(0xFFFFFFFF.toInt())
             textSize = 14f
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -132,110 +106,62 @@ class PdfPagePreviewActivity : AppCompatActivity() {
         topRow.addView(tvTitle)
         topBar.addView(topRow)
 
-        tvHint = TextView(this).apply {
-            setTextColor(0xFFFF6B9D.toInt())
-            textSize = 12f
-            setPadding(0, 8, 0, 0)
-            text = when (mode) {
-                MODE_ADD_TEXT -> "👆 텍스트 넣을 위치를 탭 (확대 후 탭 가능)"
-                MODE_HIGHLIGHT -> "👆 하이라이트할 위치를 탭"
-                MODE_STICKY -> "👆 메모 붙일 위치를 탭"
-                MODE_RECTANGLE -> "👆 사각형 시작 위치를 탭"
-                MODE_CIRCLE -> "👆 원의 중심 위치를 탭"
-                else -> ""
+        if (mode != MODE_PREVIEW) {
+            val hint = TextView(this).apply {
+                text = when (mode) {
+                    MODE_ADD_TEXT -> "👆 텍스트 넣을 위치를 탭"
+                    MODE_HIGHLIGHT -> "👆 하이라이트할 위치를 탭"
+                    MODE_STICKY -> "👆 메모 붙일 위치를 탭"
+                    MODE_RECTANGLE -> "👆 사각형 위치를 탭"
+                    MODE_CIRCLE -> "👆 원 중심을 탭"
+                    else -> ""
+                }
+                setTextColor(0xFFFF6B9D.toInt())
+                textSize = 12f
+                setPadding(0, 8, 0, 0)
             }
-            visibility = if (mode == MODE_PREVIEW) View.GONE else View.VISIBLE
+            topBar.addView(hint)
         }
-        topBar.addView(tvHint)
 
         root.addView(topBar)
         setContentView(root)
 
-        // ⭐ PDFView 로드 (핀치/스크롤 자유)
-        pdfView.fromFile(file)
-            .enableSwipe(true)
-            .swipeHorizontal(false)
-            .enableDoubletap(true)
-            .enableAntialiasing(true)
-            .spacing(10)
-            .defaultPage(pageIndex)
-            .scrollHandle(DefaultScrollHandle(this))
-            .onPageChange(object : OnPageChangeListener {
-                override fun onPageChanged(page: Int, pageCount: Int) {
-                    pageIndex = page
-                    // 새 페이지 크기 로드
-                    lifecycleScope.launch {
-                        val (w, h) = withContext(Dispatchers.IO) { getPageSizePt(file, page) }
-                        pageWidthPt = w
-                        pageHeightPt = h
-                    }
-                }
-            })
-            .load()
+        // 페이지 크기 + 렌더
+        lifecycleScope.launch {
+            val (w, h) = withContext(Dispatchers.IO) { getPageSizePt(file, pageIndex) }
+            pageWidthPt = w
+            pageHeightPt = h
 
-        pdfView.setMaxZoom(8.0f)
-        pdfView.setMinZoom(1.0f)
-        pdfView.useBestQuality(true)
-
-        // ⭐ 오버레이 탭 (스크롤/핀치는 PDFView가 처리)
-        if (mode != MODE_PREVIEW) {
-            overlay.setOnTouchListener { _, event ->
-                if (event.action == MotionEvent.ACTION_UP) {
-                    val duration = event.eventTime - event.downTime
-                    // 짧은 탭만 처리 (스크롤과 구분)
-                    if (duration < 300) {
-                        handleTap(event.x, event.y, pdfView.width, pdfView.height)
-                    }
-                }
-                false  // 모든 이벤트를 PDFView로 전달
+            val bmp = withContext(Dispatchers.IO) { renderPage(file, pageIndex, 2400) }
+            if (bmp != null) {
+                zoomView.setImageBitmap(bmp)
+            } else {
+                Toast.makeText(this@PdfPagePreviewActivity,
+                    "페이지 렌더 실패", Toast.LENGTH_LONG).show()
             }
         }
-    }
 
-    /**
-     * ⭐ 탭 → PDF 좌표
-     * mhiew는 getPageOffset 없음 → 상대좌표 방식
-     * viewW, viewH 기준으로 PDF 비율로 변환
-     */
-    private fun handleTap(tapX: Float, tapY: Float, viewW: Int, viewH: Int) {
-        try {
-            // 페이지 렌더 크기 (pt) → 뷰 픽셀
-            // mhiew는 페이지를 뷰에 fit-to-width 또는 fit-to-screen으로 표시
-            val pageSizePx = pdfView.getPageSize(pageIndex)
+        // ⭐ 탭 콜백 (모드에 따라)
+        zoomView.onTapListener = { viewX, viewY ->
+            if (mode != MODE_PREVIEW) {
+                // 뷰 좌표 → 이미지 좌표 → PDF 좌표
+                val imgPt: PointF = zoomView.viewToImage(viewX, viewY)
+                val pdfX = imgPt.x / 2400f * pageWidthPt
+                val pdfY = (1f - imgPt.y / 3396f) * pageHeightPt  // Y축 반전
 
-            val pageW = pageSizePx.width.toFloat()
-            val pageH = pageSizePx.height.toFloat()
+                CrashLogger.log(this, "PdfPagePreview",
+                    "탭: view=(${"%.1f".format(viewX)}, ${"%.1f".format(viewY)}) " +
+                    "img=(${"%.1f".format(imgPt.x)}, ${"%.1f".format(imgPt.y)}) " +
+                    "→ pdf=(${"%.1f".format(pdfX)}, ${"%.1f".format(pdfY)})")
 
-            val scaleX = pageW / pageWidthPt
-            val scaleY = pageH / pageHeightPt
-
-            // 뷰 중앙 정렬 가정
-            val pageLeft = (viewW - pageW) / 2f
-            val pageTop = (viewH - pageH) / 2f
-
-            val localX = tapX - pageLeft
-            val localY = tapY - pageTop
-
-            val pdfX = localX / scaleX
-            val pdfY = pageHeightPt - (localY / scaleY)  // 좌하단 기준
-
-            CrashLogger.log(this, "PdfPagePreview",
-                "탭: view=(${"%.1f".format(tapX)}, ${"%.1f".format(tapY)}) " +
-                "pagePx=(${"%.0f".format(pageW)}x${"%.0f".format(pageH)}) " +
-                "pageLeft=${"%.1f".format(pageLeft)} pageTop=${"%.1f".format(pageTop)} " +
-                "local=(${"%.1f".format(localX)}, ${"%.1f".format(localY)}) " +
-                "→ pdf=(${"%.1f".format(pdfX)}, ${"%.1f".format(pdfY)})")
-
-            when (mode) {
-                MODE_ADD_TEXT -> showAddTextDialog(pdfX, pdfY)
-                MODE_HIGHLIGHT -> performHighlight(pdfX, pdfY)
-                MODE_STICKY -> showStickyDialog(pdfX, pdfY)
-                MODE_RECTANGLE -> showRectangleDialog(pdfX, pdfY)
-                MODE_CIRCLE -> showCircleDialog(pdfX, pdfY)
+                when (mode) {
+                    MODE_ADD_TEXT -> showAddTextDialog(pdfX, pdfY)
+                    MODE_HIGHLIGHT -> performHighlight(pdfX, pdfY)
+                    MODE_STICKY -> showStickyDialog(pdfX, pdfY)
+                    MODE_RECTANGLE -> showRectangleDialog(pdfX, pdfY)
+                    MODE_CIRCLE -> showCircleDialog(pdfX, pdfY)
+                }
             }
-        } catch (e: Exception) {
-            CrashLogger.e(this, "PdfPagePreview", "탭 실패", e)
-            Toast.makeText(this, "탭 오류: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -302,7 +228,6 @@ class PdfPagePreviewActivity : AppCompatActivity() {
                     else -> Color.CYAN
                 }
                 lifecycleScope.launch {
-                    Toast.makeText(this@PdfPagePreviewActivity, "저장 중...", Toast.LENGTH_SHORT).show()
                     val result = withContext(Dispatchers.IO) {
                         PdfAnnotation.addHighlight(
                             this@PdfPagePreviewActivity, file, pageIndex,
@@ -351,8 +276,8 @@ class PdfPagePreviewActivity : AppCompatActivity() {
 
     private fun showRectangleDialog(x: Float, y: Float) {
         AlertDialog.Builder(this, R.style.DarkDialogTheme)
-            .setTitle("⬜ 사각형 크기")
-            .setItems(arrayOf("작게 (100x50)", "중간 (200x100)", "크게 (300x150)")) { _, which ->
+            .setTitle("⬜ 사각형")
+            .setItems(arrayOf("작게", "중간", "크게")) { _, which ->
                 val (w, h) = when (which) {
                     0 -> 100f to 50f
                     1 -> 200f to 100f
@@ -380,12 +305,10 @@ class PdfPagePreviewActivity : AppCompatActivity() {
 
     private fun showCircleDialog(x: Float, y: Float) {
         AlertDialog.Builder(this, R.style.DarkDialogTheme)
-            .setTitle("⭕ 원 크기")
-            .setItems(arrayOf("작게 (r=30)", "중간 (r=60)", "크게 (r=100)")) { _, which ->
+            .setTitle("⭕ 원")
+            .setItems(arrayOf("작게", "중간", "크게")) { _, which ->
                 val r = when (which) {
-                    0 -> 30f
-                    1 -> 60f
-                    else -> 100f
+                    0 -> 30f; 1 -> 60f; else -> 100f
                 }
                 lifecycleScope.launch {
                     val result = withContext(Dispatchers.IO) {
@@ -407,30 +330,43 @@ class PdfPagePreviewActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun makeEditText(hint: String): EditText {
-        return EditText(this).apply {
-            this.hint = hint
-            setHintTextColor(0xFF888888.toInt())
-            setTextColor(0xFFFFFFFF.toInt())
-            textSize = 15f
-            setPadding(24, 20, 24, 20)
-            setBackgroundColor(0xFF2A2A2A.toInt())
-        }
+    private fun makeEditText(hint: String): EditText = EditText(this).apply {
+        this.hint = hint
+        setHintTextColor(0xFF888888.toInt())
+        setTextColor(0xFFFFFFFF.toInt())
+        textSize = 15f
+        setPadding(24, 20, 24, 20)
+        setBackgroundColor(0xFF2A2A2A.toInt())
     }
 
-    private fun makeLabel(text: String): TextView {
-        return TextView(this).apply {
-            this.text = text
-            setTextColor(0xFFCCCCCC.toInt())
-            textSize = 11f
-            setPadding(0, 8, 0, 8)
-        }
+    private fun makeLabel(text: String): TextView = TextView(this).apply {
+        this.text = text
+        setTextColor(0xFFCCCCCC.toInt())
+        textSize = 11f
+        setPadding(0, 8, 0, 8)
     }
 
     private fun returnResult() {
         val data = Intent().apply { putExtra(RESULT_PAGE_INDEX, pageIndex) }
         setResult(Activity.RESULT_OK, data)
         finish()
+    }
+
+    private fun renderPage(file: File, pageIndex: Int, targetWidth: Int): Bitmap? {
+        return try {
+            val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            PdfRenderer(pfd).use { renderer ->
+                if (pageIndex < 0 || pageIndex >= renderer.pageCount) return null
+                renderer.openPage(pageIndex).use { page ->
+                    val scale = targetWidth.toFloat() / page.width
+                    val h = (page.height * scale).toInt()
+                    val bmp = Bitmap.createBitmap(targetWidth, h, Bitmap.Config.ARGB_8888)
+                    bmp.eraseColor(Color.WHITE)
+                    page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    bmp
+                }
+            }
+        } catch (e: Exception) { null }
     }
 
     private fun getPageSizePt(file: File, pageIndex: Int): Pair<Float, Float> {
@@ -441,8 +377,6 @@ class PdfPagePreviewActivity : AppCompatActivity() {
                 val box = page.mediaBox
                 box.width to box.height
             }
-        } catch (e: Exception) {
-            595f to 842f
-        }
+        } catch (e: Exception) { 595f to 842f }
     }
 }
