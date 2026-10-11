@@ -334,11 +334,11 @@ class PdfEditorActivity : AppCompatActivity() {
                 6 -> rotatePage(originalIndex, 90)
                 7 -> rotatePage(originalIndex, -90)
                 8 -> {
-                    if (currentPos > 0) movePage(currentPos, currentPos - 1)
+                    if (currentPos > 0) session.movePage(currentPos, currentPos - 1)
                     else Toast.makeText(this, "첫 페이지", Toast.LENGTH_SHORT).show()
                 }
                 9 -> {
-                    if (currentPos < session.pageCount - 1) movePage(currentPos, currentPos + 1)
+                    if (currentPos < session.pageCount - 1) session.movePage(currentPos, currentPos + 1)
                     else Toast.makeText(this, "마지막 페이지", Toast.LENGTH_SHORT).show()
                 }
                 10 -> extractPage(originalIndex)
@@ -380,11 +380,11 @@ class PdfEditorActivity : AppCompatActivity() {
                     6 -> rotatePage(originalIndex, 90)
                     7 -> rotatePage(originalIndex, -90)
                     8 -> {
-                        if (currentPos > 0) movePage(currentPos, currentPos - 1)
+                        if (currentPos > 0) session.movePage(currentPos, currentPos - 1)
                         else Toast.makeText(this, "첫 페이지", Toast.LENGTH_SHORT).show()
                     }
                     9 -> {
-                        if (currentPos < session.pageCount - 1) movePage(currentPos, currentPos + 1)
+                        if (currentPos < session.pageCount - 1) session.movePage(currentPos, currentPos + 1)
                         else Toast.makeText(this, "마지막 페이지", Toast.LENGTH_SHORT).show()
                     }
                     10 -> confirmDeletePage(originalIndex)
