@@ -75,13 +75,8 @@ class PdfPagePreviewActivity : AppCompatActivity() {
         root.setBackgroundColor(Color.parseColor("#0D1117"))
 
         // ⭐ mhiew PDFView (핀치/스크롤/더블탭 완벽)
-        pdfView = PDFView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            setBackgroundColor(Color.parseColor("#0D1117"))
-        }
+        pdfView = layoutInflater.inflate(R.layout.view_pdf, root, false) as PDFView
+        pdfView.setBackgroundColor(Color.parseColor("#0D1117"))
         root.addView(pdfView)
 
         // ⭐ 투명 오버레이 (탭만 감지, 스크롤/핀치는 통과)
@@ -198,26 +193,37 @@ class PdfPagePreviewActivity : AppCompatActivity() {
     }
 
     /**
-     * ⭐ 탭 → PDF 좌표 (getPageOffset + getPageSize 방식)
+     * ⭐ 탭 → PDF 좌표
+     * mhiew는 getPageOffset 없음 → 상대좌표 방식
+     * viewW, viewH 기준으로 PDF 비율로 변환
      */
     private fun handleTap(tapX: Float, tapY: Float, viewW: Int, viewH: Int) {
         try {
-            val pageOffset = pdfView.getPageOffset(pageIndex)
-            val pageSize = pdfView.getPageSize(pageIndex)
+            // 페이지 렌더 크기 (pt) → 뷰 픽셀
+            // mhiew는 페이지를 뷰에 fit-to-width 또는 fit-to-screen으로 표시
+            val pageSizePx = pdfView.getPageSize(pageIndex)
 
-            val localX = tapX - pageOffset.x
-            val localY = tapY - pageOffset.y
+            val pageW = pageSizePx.width.toFloat()
+            val pageH = pageSizePx.height.toFloat()
 
-            val scaleX = pageSize.width / pageWidthPt
-            val scaleY = pageSize.height / pageHeightPt
+            val scaleX = pageW / pageWidthPt
+            val scaleY = pageH / pageHeightPt
+
+            // 뷰 중앙 정렬 가정
+            val pageLeft = (viewW - pageW) / 2f
+            val pageTop = (viewH - pageH) / 2f
+
+            val localX = tapX - pageLeft
+            val localY = tapY - pageTop
 
             val pdfX = localX / scaleX
-            val pdfY = (pageHeightPt * scaleY - localY) / scaleY  // Y축 반전
+            val pdfY = pageHeightPt - (localY / scaleY)  // 좌하단 기준
 
             CrashLogger.log(this, "PdfPagePreview",
                 "탭: view=(${"%.1f".format(tapX)}, ${"%.1f".format(tapY)}) " +
-                "offset=(${"%.1f".format(pageOffset.x)}, ${"%.1f".format(pageOffset.y)}) " +
-                "size=(${"%.1f".format(pageSize.width)}x${"%.1f".format(pageSize.height)}) " +
+                "pagePx=(${"%.0f".format(pageW)}x${"%.0f".format(pageH)}) " +
+                "pageLeft=${"%.1f".format(pageLeft)} pageTop=${"%.1f".format(pageTop)} " +
+                "local=(${"%.1f".format(localX)}, ${"%.1f".format(localY)}) " +
                 "→ pdf=(${"%.1f".format(pdfX)}, ${"%.1f".format(pdfY)})")
 
             when (mode) {

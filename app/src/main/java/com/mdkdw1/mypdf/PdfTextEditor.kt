@@ -69,12 +69,8 @@ object PdfTextEditor {
                                 foundY = pageHeightPt - (tp.yDirAdj + tp.heightDir)
                                 foundWidth = tp.widthDirAdj
                                 foundHeight = tp.heightDir
-                                try {
-                                    val c = tp.graphicsState?.nonStrokingColor
-                                    if (c != null) {
-                                        foundColor = c.toRGB()
-                                    }
-                                } catch (_: Exception) {}
+                                // 색상은 기본 검정 (PdfBox-Android API 제한)
+                                foundColor = Color.BLACK
                                 found = true
                                 return
                             }
