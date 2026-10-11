@@ -266,7 +266,7 @@ fun OcrOverlayScreen(
                     pageBitmap != null -> OverlayCanvas(
                         bitmap = pageBitmap!!,
                         blocks = blocks,
-                        showOriginal = hideOriginal
+                        hideOriginal = hideOriginal
                     )
                 }
             }
