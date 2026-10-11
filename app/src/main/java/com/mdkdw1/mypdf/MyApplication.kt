@@ -12,18 +12,13 @@ class MyApplication : Application() {
 
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                // 크래시 로그 저장
                 CrashLogger.logCrash(this, throwable)
-
-                // 크래시 화면 표시
                 val crashIntent = Intent(this, CrashActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                     putExtra("stack", CrashLogger.readCrash(this@MyApplication))
                 }
                 startActivity(crashIntent)
-            } catch (e: Exception) {
-                // 저장 실패 시 무시
-            }
+            } catch (_: Exception) {}
             defaultHandler?.uncaughtException(thread, throwable)
         }
 
