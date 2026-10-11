@@ -350,10 +350,18 @@ class PdfEditSession(
 
     suspend fun save(): Result<File> = withContext(Dispatchers.IO) {
         try {
-            val doc = document ?: return@withContext Result.failure(Exception("문서 없음"))
-            doc.save(sourceFile)
+            // ⭐ 편집은 PdfTextEditor/PdfAnnotation이 이미 파일에 반영함
+            // 여기서 저장하면 옛 document로 덮어씀 → 재로드만 수행
+            document?.close()
+            document = PDDocument.load(sourceFile)
+
+            CrashLogger.log(context, "PdfEditSession",
+                "💾 save() 재로드: ${sourceFile.name} (${sourceFile.length()} bytes)")
             Result.success(sourceFile)
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: Exception) {
+            CrashLogger.e(context, "PdfEditSession", "save 실패", e)
+            Result.failure(e)
+        }
     }
 
     suspend fun saveAs(newName: String): Result<File> = withContext(Dispatchers.IO) {

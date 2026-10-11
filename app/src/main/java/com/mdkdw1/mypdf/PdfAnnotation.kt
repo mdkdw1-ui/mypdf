@@ -15,6 +15,30 @@ import java.io.File
  */
 object PdfAnnotation {
 
+    /**
+     * ⭐ 안전 저장: 임시 파일 → 원본 교체 (PdfBox 2.x 이슈 회피)
+     */
+    private fun safeSave(doc: PDDocument, target: File, context: Context): Boolean {
+        return try {
+            val beforeSize = if (target.exists()) target.length() else 0
+
+            val tmp = File(context.cacheDir, "tmp_${System.currentTimeMillis()}.pdf")
+            doc.save(tmp)
+
+            if (target.exists()) target.delete()
+            tmp.copyTo(target, overwrite = true)
+            tmp.delete()
+
+            val afterSize = target.length()
+            CrashLogger.log(context, "PdfAnnotation",
+                "safeSave: $beforeSize → $afterSize bytes (${if (afterSize > beforeSize) "+" else ""}${afterSize - beforeSize})")
+            true
+        } catch (e: Exception) {
+            CrashLogger.e(context, "PdfAnnotation", "safeSave 실패", e)
+            false
+        }
+    }
+
     /** 하이라이트 (반투명 사각형) */
     suspend fun addHighlight(
         context: Context, file: File, pageIndex: Int,
@@ -38,7 +62,7 @@ object PdfAnnotation {
                     cs.addRect(x, y, w, h)
                     cs.fill()
                 }
-                doc.save(file)
+                safeSave(doc, file, context)
             }
             Result.success(file)
         } catch (e: Exception) {
@@ -79,7 +103,7 @@ object PdfAnnotation {
                     cs.showText(text.take(60))
                     cs.endText()
                 }
-                doc.save(file)
+                safeSave(doc, file, context)
             }
             Result.success(file)
         } catch (e: Exception) {
@@ -107,7 +131,7 @@ object PdfAnnotation {
                     cs.addRect(x, y, w, h)
                     cs.stroke()
                 }
-                doc.save(file)
+                safeSave(doc, file, context)
             }
             Result.success(file)
         } catch (e: Exception) { Result.failure(e) }
@@ -139,7 +163,7 @@ object PdfAnnotation {
                     cs.closePath()
                     cs.stroke()
                 }
-                doc.save(file)
+                safeSave(doc, file, context)
             }
             Result.success(file)
         } catch (e: Exception) { Result.failure(e) }
@@ -170,7 +194,7 @@ object PdfAnnotation {
                     }
                     cs.stroke()
                 }
-                doc.save(file)
+                safeSave(doc, file, context)
             }
             Result.success(file)
         } catch (e: Exception) { Result.failure(e) }

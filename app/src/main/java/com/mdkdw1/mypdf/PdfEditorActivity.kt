@@ -611,6 +611,8 @@ class PdfEditorActivity : AppCompatActivity() {
 
     private fun refreshThumb(originalIndex: Int) {
         lifecycleScope.launch {
+            // ⭐ 외부 편집 후 세션 재로드 (필수!)
+            session.reload()
             val newThumb = session.renderThumbnail(originalIndex, 300, true)
             thumbnails[originalIndex] = newThumb
             refreshAdapter()

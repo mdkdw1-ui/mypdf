@@ -64,10 +64,14 @@ class PdfPagePreviewActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
+            // ⭐ FIT_CENTER: 이미지 중앙 배치 (핀치 초점 정상화)
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
             minimumScale = 1f
             mediumScale = 2f
             maximumScale = 8f
             setBackgroundColor(Color.parseColor("#0D1117"))
+            // ⭐ 애니메이션
+            setAnimateOnUserGesture(false)  // 제스처 중 애니메이션 X (부드러움)
         }
         root.addView(photoView)
 

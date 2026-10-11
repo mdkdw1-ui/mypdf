@@ -20,6 +20,30 @@ import java.io.File
  */
 object PdfTextEditor {
 
+    /**
+     * ⭐ 안전 저장: 임시 파일 → 원본 교체 (PdfBox 2.x 이슈 회피)
+     */
+    private fun safeSave(doc: PDDocument, target: File, context: Context): Boolean {
+        return try {
+            val beforeSize = if (target.exists()) target.length() else 0
+
+            val tmp = File(context.cacheDir, "tmp_${System.currentTimeMillis()}.pdf")
+            doc.save(tmp)
+
+            if (target.exists()) target.delete()
+            tmp.copyTo(target, overwrite = true)
+            tmp.delete()
+
+            val afterSize = target.length()
+            CrashLogger.log(context, "PdfTextEditor",
+                "safeSave: $beforeSize → $afterSize bytes (${if (afterSize > beforeSize) "+" else ""}${afterSize - beforeSize})")
+            true
+        } catch (e: Exception) {
+            CrashLogger.e(context, "PdfTextEditor", "safeSave 실패", e)
+            false
+        }
+    }
+
     /** 텍스트에 한글이나 비-ASCII 문자 포함 여부 */
     private fun hasNonAscii(text: String): Boolean =
         text.any { it.code > 127 }
@@ -84,7 +108,7 @@ object PdfTextEditor {
                         }
                     }
                 }
-                doc.save(file)
+                safeSave(doc, file, context)
                 CrashLogger.log(context, "PdfTextEditor",
                     "✅ 텍스트 저장: '${newText.take(20)}' → ${file.name}")
             }
@@ -130,7 +154,7 @@ object PdfTextEditor {
                         cs.endText()
                     }
                 }
-                doc.save(file)
+                safeSave(doc, file, context)
                 CrashLogger.log(context, "PdfTextEditor",
                     "✅ 텍스트 추가: '${text.take(20)}' at ($x, $y)")
             }
