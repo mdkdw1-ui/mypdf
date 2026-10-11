@@ -85,6 +85,8 @@ object PdfTextEditor {
                     }
                 }
                 doc.save(file)
+                CrashLogger.log(context, "PdfTextEditor",
+                    "✅ 텍스트 저장: '${newText.take(20)}' → ${file.name}")
             }
             Result.success(file)
         } catch (e: Exception) {
@@ -129,6 +131,8 @@ object PdfTextEditor {
                     }
                 }
                 doc.save(file)
+                CrashLogger.log(context, "PdfTextEditor",
+                    "✅ 텍스트 추가: '${text.take(20)}' at ($x, $y)")
             }
             Result.success(file)
         } catch (e: Exception) {
