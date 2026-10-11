@@ -17,7 +17,6 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.github.barteksc.pdfviewer.PDFView
-import com.mdkdw1.mypdf.TapAwarePdfView
 import com.github.barteksc.pdfviewer.listener.OnPageChangeListener
 import com.github.barteksc.pdfviewer.scroll.DefaultScrollHandle
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +44,7 @@ class PdfPagePreviewActivity : AppCompatActivity() {
         const val RESULT_PAGE_INDEX = "result_page_index"
     }
 
-    private lateinit var pdfView: TapAwarePdfView
+    private lateinit var pdfView: PDFView
     private lateinit var tvHint: TextView
     private var pageIndex = 0
     private var mode = MODE_PREVIEW
@@ -66,7 +65,7 @@ class PdfPagePreviewActivity : AppCompatActivity() {
         root.setBackgroundColor(Color.parseColor("#0D1117"))
 
         // ⭐ mhiew PDFView (핀치/스크롤 완벽)
-        pdfView = layoutInflater.inflate(R.layout.view_tap_pdf, root, false) as TapAwarePdfView
+        pdfView = layoutInflater.inflate(R.layout.view_pdf, root, false) as PDFView
         pdfView.setBackgroundColor(Color.parseColor("#0D1117"))
         root.addView(pdfView)
 
@@ -162,11 +161,29 @@ class PdfPagePreviewActivity : AppCompatActivity() {
             pageHeightPt = h
         }
 
-        // ⭐ 탭 리스너 (모드일 때만)
-        if (mode != MODE_PREVIEW) {
-            pdfView.onTapListener = { x, y ->
-                handleTap(x, y)
+        // ⭐ 탭 감지 (순수 PDFView + setOnTouchListener, false 반환)
+        var tapDownX = 0f
+        var tapDownY = 0f
+        var tapDownTime = 0L
+
+        pdfView.setOnTouchListener { _, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    tapDownX = event.x
+                    tapDownY = event.y
+                    tapDownTime = System.currentTimeMillis()
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    val duration = System.currentTimeMillis() - tapDownTime
+                    val dx = kotlin.math.abs(event.x - tapDownX)
+                    val dy = kotlin.math.abs(event.y - tapDownY)
+                    if (mode != MODE_PREVIEW &&
+                        duration < 250 && dx < 15 && dy < 15) {
+                        handleTap(event.x, event.y)
+                    }
+                }
             }
+            false  // ⭐⭐⭐ PDFView로 이벤트 통과 (핀치/스크롤 핵심)
         }
     }
 
