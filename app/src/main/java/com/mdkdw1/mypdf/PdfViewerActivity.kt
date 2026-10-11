@@ -54,72 +54,68 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
 
         val root = FrameLayout(this)
 
-        // PDFView — XML inflate (attrs 필요)
+        // PDFView — XML inflate
         pdfView = layoutInflater.inflate(R.layout.view_pdf, root, false) as PDFView
         root.addView(pdfView)
 
         // ── 상단 툴바 ──
-        val toolbar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(0xCC000000.toInt())
-            setPadding(8, 8, 8, 8)
-            gravity = Gravity.CENTER_VERTICAL
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { gravity = Gravity.TOP }
+        val toolbar = LinearLayout(this)
+        toolbar.orientation = LinearLayout.HORIZONTAL
+        toolbar.setBackgroundColor(0xCC000000.toInt())
+        toolbar.setPadding(8, 8, 8, 8)
+        toolbar.gravity = Gravity.CENTER_VERTICAL
+        val toolbarLp = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        toolbarLp.gravity = Gravity.TOP
+        toolbar.layoutParams = toolbarLp
+
+        val btnClose = Button(this)
+        btnClose.text = "✕"
+        btnClose.setTextColor(0xFFFFFFFF.toInt())
+        btnClose.setBackgroundColor(0)
+        btnClose.setOnClickListener { finish() }
+
+        tvFileName = TextView(this)
+        tvFileName.setTextColor(0xFFFFFFFF.toInt())
+        tvFileName.textSize = 12f
+        tvFileName.maxLines = 1
+        tvFileName.ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+        tvFileName.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        tvFileName.setPadding(16, 0, 8, 0)
+
+        val btnSelect = Button(this)
+        btnSelect.text = "✏"
+        btnSelect.setTextColor(0xFFFFFFFF.toInt())
+        btnSelect.setBackgroundColor(0)
+        btnSelect.setOnClickListener {
+            selectionMode = !selectionMode
+            btnSelect.setBackgroundColor(if (selectionMode) 0x88FF6B9D.toInt() else 0)
+            Toast.makeText(
+                this@PdfViewerActivity,
+                if (selectionMode) "선택 모드 ON — 길게 눌러 번역" else "선택 모드 OFF",
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
-        val btnClose = Button(this).apply {
-            text = "✕"
-            setTextColor(0xFFFFFFFF.toInt())
-            setBackgroundColor(0)
-            setOnClickListener { finish() }
+        val btnOverlay = Button(this)
+        btnOverlay.text = "🎨"
+        btnOverlay.setTextColor(0xFFFFFFFF.toInt())
+        btnOverlay.setBackgroundColor(0)
+        btnOverlay.setOnClickListener {
+            val intent = Intent(this@PdfViewerActivity, OcrOverlayActivity::class.java)
+            intent.putExtra("pdf_path", file.absolutePath)
+            intent.putExtra("page_index", currentPage)
+            startActivity(intent)
         }
 
-        tvFileName = TextView(this).apply {
-            setTextColor(0xFFFFFFFF.toInt())
-            textSize = 12f
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            setPadding(16, 0, 8, 0)
-        }
-
-        val btnSelect = Button(this).apply {
-            text = "✏"
-            setTextColor(0xFFFFFFFF.toInt())
-            setBackgroundColor(0)
-            setOnClickListener {
-                selectionMode = !selectionMode
-                setBackgroundColor(if (selectionMode) 0x88FF6B9D.toInt() else 0)
-                Toast.makeText(
-                    this@PdfViewerActivity,
-                    if (selectionMode) "선택 모드 ON — 길게 눌러 번역" else "선택 모드 OFF",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-        }
-
-        val btnOverlay = Button(this).apply {
-            text = "🎨"
-            setTextColor(0xFFFFFFFF.toInt())
-            setBackgroundColor(0)
-            setOnClickListener {
-                startActivity(Intent(this@PdfViewerActivity, OcrOverlayActivity::class.java).apply {
-                    putExtra("pdf_path", file.absolutePath)
-                    putExtra("page_index", currentPage)
-                })
-            }
-        }
-
-        val btnSettings = Button(this).apply {
-            text = "⚙"
-            setTextColor(0xFFFFFFFF.toInt())
-            setBackgroundColor(0)
-            setOnClickListener {
-                startActivity(Intent(this@PdfViewerActivity, LogActivity::class.java))
-            }
+        val btnSettings = Button(this)
+        btnSettings.text = "⚙"
+        btnSettings.setTextColor(0xFFFFFFFF.toInt())
+        btnSettings.setBackgroundColor(0)
+        btnSettings.setOnClickListener {
+            startActivity(Intent(this@PdfViewerActivity, LogActivity::class.java))
         }
 
         toolbar.addView(btnClose)
@@ -130,36 +126,34 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
         root.addView(toolbar)
 
         // ── 하단 바 ──
-        val bottomBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(0xCC000000.toInt())
-            setPadding(16, 12, 16, 12)
-            gravity = Gravity.CENTER
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { gravity = Gravity.BOTTOM }
+        val bottomBar = LinearLayout(this)
+        bottomBar.orientation = LinearLayout.HORIZONTAL
+        bottomBar.setBackgroundColor(0xCC000000.toInt())
+        bottomBar.setPadding(16, 12, 16, 12)
+        bottomBar.gravity = Gravity.CENTER
+        val bottomLp = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        bottomLp.gravity = Gravity.BOTTOM
+        bottomBar.layoutParams = bottomLp
+
+        val btnPrev = Button(this)
+        btnPrev.text = "◀"
+        btnPrev.setOnClickListener {
+            if (currentPage > 0) pdfView.jumpTo(currentPage - 1)
         }
 
-        val btnPrev = Button(this).apply {
-            text = "◀"
-            setOnClickListener {
-                if (currentPage > 0) pdfView.jumpTo(currentPage - 1)
-            }
-        }
+        tvPageInfo = TextView(this)
+        tvPageInfo.setTextColor(0xFFFFFFFF.toInt())
+        tvPageInfo.textSize = 14f
+        tvPageInfo.setPadding(24, 0, 24, 0)
+        tvPageInfo.text = "0 / 0"
 
-        tvPageInfo = TextView(this).apply {
-            setTextColor(0xFFFFFFFF.toInt())
-            textSize = 14f
-            setPadding(24, 0, 24, 0)
-            text = "0 / 0"
-        }
-
-        val btnNext = Button(this).apply {
-            text = "▶"
-            setOnClickListener {
-                if (currentPage < pageCount - 1) pdfView.jumpTo(currentPage + 1)
-            }
+        val btnNext = Button(this)
+        btnNext.text = "▶"
+        btnNext.setOnClickListener {
+            if (currentPage < pageCount - 1) pdfView.jumpTo(currentPage + 1)
         }
 
         bottomBar.addView(btnPrev)
@@ -171,7 +165,6 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
 
         loadPdf()
 
-        // 롱프레스 → 번역 (선택 모드일 때)
         pdfView.setOnLongClickListener {
             if (selectionMode) {
                 handleLongPress()
@@ -179,7 +172,6 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
             } else false
         }
 
-        // 좌표 추적 (핀치/스크롤은 PDFView가 처리)
         pdfView.setOnTouchListener { _, event ->
             if (event.action == android.view.MotionEvent.ACTION_DOWN) {
                 lastTapX = event.x
@@ -188,7 +180,6 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
             false
         }
 
-        // 툴바 토글
         pdfView.setOnClickListener {
             toolbarVisible = !toolbarVisible
             val v = if (toolbarVisible) View.VISIBLE else View.GONE
@@ -254,39 +245,45 @@ class PdfViewerActivity : AppCompatActivity(), OnPageChangeListener, OnLoadCompl
     }
 
     private fun showTranslateDialog(text: String) {
-        val input = EditText(this).apply {
-            setText(text)
-            setSelection(text.length)
-        }
+        // ── 입력 필드 ──
+        val input = EditText(this)
+        input.setText(text)
+        input.setSelection(text.length)
 
-        val output = TextView(this).apply {
-            textSize = 14f
-            setPadding(24, 24, 24, 24)
-            setTextColor(0xFF333333.toInt())
-        }
+        // ── 출력 필드 ──
+        val output = TextView(this)
+        output.textSize = 14f
+        output.setPadding(24, 24, 24, 24)
+        output.setTextColor(0xFF333333.toInt())
 
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(24, 16, 24, 16)
-            addView(TextView(this@PdfViewerActivity).apply {
-                text = "텍스트:"
-                setTextColor(0xFF888888.toInt())
-                textSize = 11f
-            })
-            addView(input)
-            addView(TextView(this@PdfViewerActivity).apply {
-                text = "번역:"
-                setTextColor(0xFF888888.toInt())
-                textSize = 11f
-                setPadding(0, 16, 0, 8)
-            })
-            addView(ScrollView(this@PdfViewerActivity).apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
-                )
-                addView(output)
-            })
-        }
+        // ── 라벨 1 ──
+        val label1 = TextView(this)
+        label1.text = "텍스트:"
+        label1.setTextColor(0xFF888888.toInt())
+        label1.textSize = 11f
+
+        // ── 라벨 2 ──
+        val label2 = TextView(this)
+        label2.text = "번역:"
+        label2.setTextColor(0xFF888888.toInt())
+        label2.textSize = 11f
+        label2.setPadding(0, 16, 0, 8)
+
+        // ── 스크롤 ──
+        val scroll = ScrollView(this)
+        scroll.layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        )
+        scroll.addView(output)
+
+        // ── 컨테이너 ──
+        val container = LinearLayout(this)
+        container.orientation = LinearLayout.VERTICAL
+        container.setPadding(24, 16, 24, 16)
+        container.addView(label1)
+        container.addView(input)
+        container.addView(label2)
+        container.addView(scroll)
 
         AlertDialog.Builder(this)
             .setTitle("번역 (Groq)")
