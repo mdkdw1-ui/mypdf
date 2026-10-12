@@ -321,88 +321,110 @@ class PdfEditorActivity : AppCompatActivity() {
         val currentPos = session.getPageInfos().indexOfFirst { it.originalIndex == originalIndex }
         if (currentPos < 0) return
 
-        // ⭐ 아이콘 그리드 메뉴
+        // 축소된 그리드 — 자주 쓰는 6개만
         val items = listOf(
-            MenuItem("✏️", "텍스트 편집", 0),
-            MenuItem("✏️", "텍스트 수정", 1),
-            MenuItem("➕", "텍스트 추가", 2),
-            MenuItem("🖍", "하이라이트", 3),
-            MenuItem("📌", "스티키 노트", 4),
-            MenuItem("⬜", "사각형", 5),
-            MenuItem("⭕", "원", 6),
-            MenuItem("🔄", "오른쪽 회전", 7),
-            MenuItem("🔄", "왼쪽 회전", 8),
-            MenuItem("⬅", "왼쪽 이동", 9),
-            MenuItem("➡", "오른쪽 이동", 10),
-            MenuItem("📄", "추출", 11),
-            MenuItem("🗑", "삭제", 12, isDanger = true)
+            MenuItem("\u270f\ufe0f", "\ud14d\uc2a4\ud2b8 \ud3b8\uc9d1", 0),
+            MenuItem("\u2795", "\ud14d\uc2a4\ud2b8 \ucd94\uac00", 2),
+            MenuItem("\ud83d\udd8d", "\ud558\uc774\ub77c\uc774\ud2b8", 3),
+            MenuItem("\ud83d\udd04", "\ud68c\uc804", 7),
+            MenuItem("\ud83d\uddd1", "\uc0ad\uc81c", 12, isDanger = true),
+            MenuItem("\u22ef", "\ub354\ubcf4\uae30", 100)
         )
 
         val gridView = GridView(this).apply {
-            numColumns = 4
+            numColumns = 3
             adapter = MenuGridAdapter(this@PdfEditorActivity, items)
-            setPadding(16, 16, 16, 16)
+            setPadding(24, 24, 24, 24)
         }
 
         val dialog = AlertDialog.Builder(this, R.style.DarkDialogTheme)
-            .setTitle("📄 페이지 ${currentPos + 1}")
+            .setTitle("\ud83d\udcc4 \ud398\uc774\uc9c0 ${currentPos + 1}")
             .setView(gridView)
-            .setNegativeButton("닫기", null)
+            .setNegativeButton("\ub2eb\uae30", null)
             .create()
 
         gridView.setOnItemClickListener { _, _, position, _ ->
             dialog.dismiss()
             val id = items[position].id
             when (id) {
-                0 -> {
-                    // ⭐ 텍스트 편집 전용
-                    val intent = Intent(this, PdfSimpleEditorActivity::class.java).apply {
-                        putExtra(PdfSimpleEditorActivity.EXTRA_PATH, file.absolutePath)
-                        putExtra(PdfSimpleEditorActivity.EXTRA_PAGE, originalIndex)
-                    }
-                    previewLauncher.launch(intent)
-                }
-                1 -> showTextEditDialog(originalIndex)
-                2 -> showAddTextDialog(originalIndex)
-                3 -> addHighlight(originalIndex)
-                4 -> addStickyNote(originalIndex)
-                5 -> addRectangle(originalIndex)
-                6 -> addCircle(originalIndex)
+                100 -> showPageMenuAdvanced(originalIndex, currentPos)
                 7 -> rotatePage(originalIndex, 90)
-                8 -> rotatePage(originalIndex, -90)
-                9 -> {
-                    if (currentPos > 0) {
-                        lifecycleScope.launch {
-                            session.movePage(currentPos, currentPos - 1).fold(
-                                onSuccess = { refreshAdapter() },
-                                onFailure = {
-                                    Toast.makeText(this@PdfEditorActivity,
-                                        "❌ ${it.message}", Toast.LENGTH_LONG).show()
-                                }
-                            )
-                        }
-                    } else Toast.makeText(this, "첫 페이지", Toast.LENGTH_SHORT).show()
-                }
-                10 -> {
-                    if (currentPos < session.pageCount - 1) {
-                        lifecycleScope.launch {
-                            session.movePage(currentPos, currentPos + 1).fold(
-                                onSuccess = { refreshAdapter() },
-                                onFailure = {
-                                    Toast.makeText(this@PdfEditorActivity,
-                                        "❌ ${it.message}", Toast.LENGTH_LONG).show()
-                                }
-                            )
-                        }
-                    } else Toast.makeText(this, "마지막 페이지", Toast.LENGTH_SHORT).show()
-                }
-                11 -> extractPage(originalIndex)
-                12 -> confirmDeletePage(originalIndex)
+                else -> handleMenuItem(id, originalIndex, currentPos)
             }
         }
         dialog.show()
     }
 
+    /** \ub354\ubcf4\uae30 \uc11c\ubc0c\uba54\ub274 */
+    private fun showPageMenuAdvanced(originalIndex: Int, currentPos: Int) {
+        val options = arrayOf(
+            "\u270f\ufe0f \ud14d\uc2a4\ud2b8 \uc218\uc815 (\uae30\uc874 \ubc29\uc2dd)",
+            "\ud83d\udccc \uc2a4\ud2f0\ud0a4 \ub178\ud2b8",
+            "\u2b1c \uc0ac\uac01\ud615",
+            "\u2b55 \uc6d0",
+            "\ud83d\udd04 \uc67c\ucabd\uc73c\ub85c \ud68c\uc804",
+            "\u2b05 \uc67c\ucabd\uc73c\ub85c \uc774\ub3d9",
+            "\u27a1 \uc624\ub978\ucabd\uc73c\ub85c \uc774\ub3d9",
+            "\ud83d\udcc4 \ud398\uc774\uc9c0 \ucd94\ucd9c"
+        )
+
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
+            .setTitle("\ub354\ubcf4\uae30")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> showTextEditDialog(originalIndex)
+                    1 -> addStickyNote(originalIndex)
+                    2 -> addRectangle(originalIndex)
+                    3 -> addCircle(originalIndex)
+                    4 -> rotatePage(originalIndex, -90)
+                    5 -> {
+                        if (currentPos > 0) {
+                            lifecycleScope.launch {
+                                session.movePage(currentPos, currentPos - 1).fold(
+                                    onSuccess = { refreshAdapter() },
+                                    onFailure = {
+                                        Toast.makeText(this@PdfEditorActivity,
+                                            "\u274c ${it.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                )
+                            }
+                        } else Toast.makeText(this, "\uccab \ud398\uc774\uc9c0", Toast.LENGTH_SHORT).show()
+                    }
+                    6 -> {
+                        if (currentPos < session.pageCount - 1) {
+                            lifecycleScope.launch {
+                                session.movePage(currentPos, currentPos + 1).fold(
+                                    onSuccess = { refreshAdapter() },
+                                    onFailure = {
+                                        Toast.makeText(this@PdfEditorActivity,
+                                            "\u274c ${it.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                )
+                            }
+                        } else Toast.makeText(this, "\ub9c8\uc9c0\ub9c9 \ud398\uc774\uc9c0", Toast.LENGTH_SHORT).show()
+                    }
+                    7 -> extractPage(originalIndex)
+                }
+            }
+            .setNegativeButton("\ucde8\uc18c", null)
+            .show()
+    }
+
+    /** \uacf5\ud1b5 \uba54\ub274 \uc544\uc774\ud15c \ucc98\ub9ac */
+    private fun handleMenuItem(id: Int, originalIndex: Int, currentPos: Int) {
+        when (id) {
+            0 -> {
+                val intent = Intent(this, PdfSimpleEditorActivity::class.java).apply {
+                    putExtra(PdfSimpleEditorActivity.EXTRA_PATH, file.absolutePath)
+                    putExtra(PdfSimpleEditorActivity.EXTRA_PAGE, originalIndex)
+                }
+                previewLauncher.launch(intent)
+            }
+            2 -> showAddTextDialog(originalIndex)
+            3 -> addHighlight(originalIndex)
+            12 -> confirmDeletePage(originalIndex)
+        }
+    }
 
     private fun showPageMenuOld(originalIndex: Int) {
         val currentPos = session.getPageInfos().indexOfFirst { it.originalIndex == originalIndex }
