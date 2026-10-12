@@ -57,7 +57,7 @@ class PdfPagePreviewActivity : AppCompatActivity() {
         root.setBackgroundColor(Color.parseColor("#0D1117"))
 
         // ⭐ PDFView 코드로 직접 생성
-        pdfView = PDFView(this).apply {
+        pdfView = PDFView(this, null).apply {
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
