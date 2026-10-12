@@ -287,28 +287,53 @@ object PdfTextEditor {
                                 "교체(Bitmap): '${word.text}' → '$newText'")
                         } else {
                             // ⭐ 원본 폰트 찾기
+                            // ⭐ 한글이 아니면 서브셋 폰트는 피하고 표준 폰트 사용
+                            // 서브셋 폰트는 원본에 쓴 글자만 포함 → 새 글자는 인코딩 실패
                             val originalFont: PDFont = when {
                                 hasKorean && koreanFont != null -> koreanFont
+                                hasKorean -> {
+                                    // 한글인데 폰트 없으면 → Bitmap 폴백
+                                    // (replaceMultiple 내부에서 처리하려고 위해 미리 감지)
+                                    PDType1Font.HELVETICA  // 임시 — 아래서 Bitmap으로 변경
+                                }
                                 else -> {
-                                    // 1) 이름 그대로 매칭
-                                    availableFonts[word.fontName]
-                                    // 2) 부분 매칭 (예: "DotumChe" in "DotumChe_PDF_Subset")
-                                    ?: availableFonts.entries.find {
-                                        word.fontName.contains(it.key) ||
-                                        it.key.contains(word.fontName)
-                                    }?.value
-                                    // 3) 실패 시 Helvetica
-                                    ?: PDType1Font.HELVETICA
+                                    // 서브셋 폰트 필터링: "_PDF_Subset" 또는 "Subset" 포함 제외
+                                    fun isSubset(name: String): Boolean =
+                                        name.contains("Subset", ignoreCase = true)
+                                            || name.contains("_PDF_", ignoreCase = true)
+
+                                    // 1) 이름 정확 매칭 + 서브셋 아님
+                                    val exact = availableFonts[word.fontName]
+                                    if (exact != null && !isSubset(word.fontName)) {
+                                        exact
+                                    } else {
+                                        // 2) 부분 매칭 + 서브셋 아님
+                                        val partial = availableFonts.entries.find { (k, _) ->
+                                            !isSubset(k) &&
+                                            (word.fontName.contains(k) || k.contains(word.fontName))
+                                        }?.value
+                                        // 3) 서브셋이지만 이름 매칭되면 그거 쓰고 실패시 Bitmap 폴백
+                                        //    (PdfBox가 가능한 경우도 있음)
+                                        val subsetMatch = availableFonts[word.fontName]
+                                            ?: availableFonts.entries.find {
+                                                word.fontName.contains(it.key) ||
+                                                it.key.contains(word.fontName)
+                                            }?.value
+                                        subsetMatch ?: PDType1Font.HELVETICA
+                                    }
                                 }
                             }
 
+                            var textBlockOpen = false
                             try {
                                 cs.setNonStrokingColor(0, 0, 0)
                                 cs.beginText()
+                                textBlockOpen = true
                                 cs.setFont(originalFont, word.fontSize.coerceIn(6f, 72f))
                                 cs.newLineAtOffset(word.x, baselineY)
                                 cs.showText(newText.take(200))
                                 cs.endText()
+                                textBlockOpen = false
                                 val fontDisplayName = try {
                                     originalFont.name ?: "unknown"
                                 } catch (_: Exception) { "unknown" }
@@ -316,7 +341,11 @@ object PdfTextEditor {
                                     "교체(Font '$fontDisplayName'): " +
                                     "'${word.text}' → '$newText' (was ${word.fontName})")
                             } catch (e: Exception) {
-                                // 원본 폰트로 실패 → Bitmap 폴백
+                                // ⭐ 예외 시 텍스트 블록을 먼저 닫음 (drawImage 위반 방지)
+                                if (textBlockOpen) {
+                                    try { cs.endText() } catch (_: Exception) {}
+                                    textBlockOpen = false
+                                }
                                 CrashLogger.e(context, "PdfTextEditor",
                                     "원본 폰트 실패 → Bitmap", e)
                                 drawTextAsBitmap(doc, cs, newText, word.fontSize,
