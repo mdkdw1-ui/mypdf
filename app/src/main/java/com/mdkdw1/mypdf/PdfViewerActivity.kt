@@ -35,14 +35,12 @@ class PdfViewerActivity : AppCompatActivity() {
     private lateinit var adapter: PdfPageAdapter
     private lateinit var tvPageInfo: TextView
     private lateinit var tvFileName: TextView
-    private lateinit var btnSelect: Button
     private lateinit var prefs: ReadingPrefs
     private lateinit var file: File
     private lateinit var pdfRenderer: PdfRenderer
     private lateinit var pfd: ParcelFileDescriptor
     private var pageCount = 0
     private var currentPage = 0
-    private var selectionMode = false
 
     // ⭐ 툴바 자동 숨김
     private lateinit var toolbarRef: LinearLayout
@@ -176,23 +174,6 @@ class PdfViewerActivity : AppCompatActivity() {
             text = "1 / $pageCount"
         }
 
-        btnSelect = Button(this).apply {
-            text = "✏"
-            textSize = 22f
-            setTextColor(0xFFFFFFFF.toInt())
-            setBackgroundColor(0)
-            setPadding(40, 20, 40, 20)
-            setOnClickListener {
-                selectionMode = !selectionMode
-                setBackgroundColor(if (selectionMode) 0xFFFF6B9D.toInt() else 0)
-                Toast.makeText(
-                    this@PdfViewerActivity,
-                    if (selectionMode) "선택 모드 ON — 길게 눌러 번역" else "OFF",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-        }
-
         val btnOverlay = Button(this).apply {
             text = "🎨"
             textSize = 22f
@@ -221,7 +202,6 @@ class PdfViewerActivity : AppCompatActivity() {
         }
 
         bottomBar.addView(tvPageInfo)
-        bottomBar.addView(btnSelect)
         bottomBar.addView(btnOverlay)
         bottomBar.addView(btnEdit)
         root.addView(bottomBar)
@@ -295,7 +275,7 @@ class PdfViewerActivity : AppCompatActivity() {
                             downChildY = e.y - child.top
                         }
 
-                        if (selectionMode && downChild != null) {
+                        if (downChild != null) {
                             runnable = Runnable {
                                 val child = downChild
                                 if (child != null) {
@@ -394,11 +374,42 @@ class PdfViewerActivity : AppCompatActivity() {
             )
 
             if (found != null) {
-                showTranslateDialog(found.text)
+                showWordActionDialog(found.text, page.index)
             } else {
                 Toast.makeText(this@PdfViewerActivity, "❌ 위치 매칭 실패", Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    /**
+     * ⭐ 단어 탭 → 액션 선택 (번역 / 편집 / 복사)
+     */
+    private fun showWordActionDialog(word: String, pageIndex: Int) {
+        val display = if (word.length > 40) word.take(40) + "..." else word
+        AlertDialog.Builder(this, R.style.DarkDialogTheme)
+            .setTitle("\"$display\"")
+            .setItems(arrayOf("🌐 번역", "✏️ 편집", "📋 복사")) { _, which ->
+                when (which) {
+                    0 -> showTranslateDialog(word)
+                    1 -> {
+                        val intent = Intent(this, PdfInlineEditorActivity::class.java).apply {
+                            putExtra(PdfInlineEditorActivity.EXTRA_PATH, file.absolutePath)
+                            putExtra(PdfInlineEditorActivity.EXTRA_PAGE, pageIndex)
+                        }
+                        inlineEditorLauncher.launch(intent)
+                    }
+                    2 -> {
+                        val cm = getSystemService(CLIPBOARD_SERVICE)
+                            as android.content.ClipboardManager
+                        cm.setPrimaryClip(
+                            android.content.ClipData.newPlainText("pdf_text", word)
+                        )
+                        Toast.makeText(this, "복사됨", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNegativeButton("취소", null)
+            .show()
     }
 
     private fun showTranslateDialog(sourceText: String) {
@@ -503,6 +514,15 @@ class PdfViewerActivity : AppCompatActivity() {
                 // 이미 보이면 3초 리셋
                 scheduleAutoHide()
             }
+        }
+    }
+
+    // ⭐ 인라인 편집기 결과 → 뷰어 리프레시
+    private val inlineEditorLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            recreate()
         }
     }
 
