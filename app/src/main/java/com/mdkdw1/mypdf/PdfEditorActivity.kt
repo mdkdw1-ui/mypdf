@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import com.mdkdw1.mypdf.PdfPageEditorActivity
 import com.mdkdw1.mypdf.PdfSimpleEditorActivity
+import com.mdkdw1.mypdf.PdfInlineEditorActivity
 
 class PdfEditorActivity : AppCompatActivity() {
 
@@ -414,9 +415,9 @@ class PdfEditorActivity : AppCompatActivity() {
     private fun handleMenuItem(id: Int, originalIndex: Int, currentPos: Int) {
         when (id) {
             0 -> {
-                val intent = Intent(this, PdfSimpleEditorActivity::class.java).apply {
-                    putExtra(PdfSimpleEditorActivity.EXTRA_PATH, file.absolutePath)
-                    putExtra(PdfSimpleEditorActivity.EXTRA_PAGE, originalIndex)
+                val intent = Intent(this, PdfInlineEditorActivity::class.java).apply {
+                    putExtra(PdfInlineEditorActivity.EXTRA_PATH, file.absolutePath)
+                    putExtra(PdfInlineEditorActivity.EXTRA_PAGE, originalIndex)
                 }
                 previewLauncher.launch(intent)
             }

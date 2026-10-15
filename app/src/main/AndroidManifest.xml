@@ -104,6 +104,14 @@
             android:label="텍스트 편집"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".PdfInlineEditorActivity"
+            android:exported="false"
+            android:label="인라인 편집"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
     </application>
 
     <queries>
