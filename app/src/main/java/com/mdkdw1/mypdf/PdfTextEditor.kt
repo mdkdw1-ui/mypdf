@@ -103,17 +103,18 @@ object PdfTextEditor {
                 ).use { cs ->
                     // 1) 원본 완전 덮기 (여유 패딩)
                     // ⭐ 한글 대응 여유 확대
-                    val padX = foundHeight * 0.5f + 4f
-                    val padY = foundHeight * 0.7f + 4f
+                    // ⭐ 타이트한 덮기
+                    val padX = 2f
+                    val padY = 3f
 
                     cs.setNonStrokingColor(
                         Color.red(bgColor), Color.green(bgColor), Color.blue(bgColor)
                     )
                     cs.addRect(
                         foundX - padX,
-                        foundY - foundHeight - padY,
+                        foundY - foundHeight * 0.35f - padY,
                         foundWidth + padX * 2,
-                        foundHeight * 2 + padY * 2
+                        foundHeight * 1.7f + padY * 2
                     )
                     cs.fill()
 
@@ -266,13 +267,14 @@ object PdfTextEditor {
                         cs.setNonStrokingColor(255, 255, 255)
                         // ⭐ 원본 텍스트를 확실히 덮기 위해 여유를 더 크게
                         // 한글은 PdfBox 측정폭보다 실제 쟉킹 영역이 큼
-                        val coverPadX = word.height * 0.4f + 4f
-                        val coverPadY = word.height * 0.6f + 4f
+                        // ⭐ 타이트한 덮기 — 이웃 글자 침범 방지
+                        val coverPadX = 2f
+                        val coverPadY = 3f
                         cs.addRect(
                             word.x - coverPadX,
-                            baselineY - word.height - coverPadY,
+                            baselineY - word.height * 0.35f - coverPadY,
                             word.width + coverPadX * 2f,
-                            word.height * 2f + coverPadY * 2f
+                            word.height * 1.7f + coverPadY * 2f
                         )
                         cs.fill()
 
