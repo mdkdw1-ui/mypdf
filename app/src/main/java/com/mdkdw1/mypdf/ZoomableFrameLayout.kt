@@ -28,6 +28,10 @@ class ZoomableFrameLayout(context: Context) : FrameLayout(context) {
     private var translateX = 0f
     private var translateY = 0f
 
+    /** ⭐ 외부 좌표 계산용 공개 값 */
+    val currentTranslateX: Float get() = translateX
+    val currentTranslateY: Float get() = translateY
+
     private var lastX = 0f
     private var lastY = 0f
 

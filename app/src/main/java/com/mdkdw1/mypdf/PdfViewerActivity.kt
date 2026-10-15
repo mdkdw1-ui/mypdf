@@ -1,5 +1,9 @@
 package com.mdkdw1.mypdf
 
+import android.view.inputmethod.InputMethodManager
+import android.view.inputmethod.EditorInfo
+import android.util.TypedValue
+import android.text.InputType
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -44,6 +48,19 @@ class PdfViewerActivity : AppCompatActivity() {
 
     // ⭐ 툴바 자동 숨김
     private lateinit var toolbarRef: LinearLayout
+    // ⭐ 인라인 편집 상태
+    private lateinit var rootLayout: ZoomableFrameLayout
+    private var inlineEditView: EditText? = null
+    private var inlineEditHit: WordHit? = null
+
+    data class WordHit(
+        val word: PdfTextPicker.Word,
+        val page: PdfPageAdapter.PageData,
+        val childView: android.view.View,
+        val viewW: Float,
+        val viewH: Float
+    )
+
     private lateinit var bottomBarRef: LinearLayout
     private val autoHideHandler = Handler(Looper.getMainLooper())
     private var autoHideRunnable: Runnable? = null
@@ -207,6 +224,7 @@ class PdfViewerActivity : AppCompatActivity() {
         root.addView(bottomBar)
 
         setContentView(root)
+        rootLayout = root
 
         // ⭐ 툴바 참조 저장 + 초기 3초 후 숨김 시작
         toolbarRef = toolbar
@@ -292,7 +310,8 @@ class PdfViewerActivity : AppCompatActivity() {
                                         onPageLongPress(
                                             page,
                                             downChildX, downChildY,
-                                            child.width.toFloat(), child.height.toFloat()
+                                            child.width.toFloat(), child.height.toFloat(),
+                                            child
                                         )
                                     }
                                 }
@@ -339,7 +358,8 @@ class PdfViewerActivity : AppCompatActivity() {
     private fun onPageLongPress(
         page: PdfPageAdapter.PageData,
         tapX: Float, tapY: Float,
-        viewW: Float, viewH: Float
+        viewW: Float, viewH: Float,
+        childView: android.view.View
     ) {
         val apiKey = prefs.groqApiKey
         if (apiKey.isNullOrBlank()) {
@@ -374,7 +394,10 @@ class PdfViewerActivity : AppCompatActivity() {
             )
 
             if (found != null) {
-                showWordActionDialog(found.text, page.index)
+                showWordActionDialog(
+                    found.text, page.index,
+                    found, page, childView, viewW, viewH
+                )
             } else {
                 Toast.makeText(this@PdfViewerActivity, "❌ 위치 매칭 실패", Toast.LENGTH_LONG).show()
             }
@@ -384,20 +407,22 @@ class PdfViewerActivity : AppCompatActivity() {
     /**
      * ⭐ 단어 탭 → 액션 선택 (번역 / 편집 / 복사)
      */
-    private fun showWordActionDialog(word: String, pageIndex: Int) {
+    private fun showWordActionDialog(
+        word: String,
+        pageIndex: Int,
+        wordQuad: PdfTextPicker.Word,
+        page: PdfPageAdapter.PageData,
+        childView: android.view.View,
+        viewW: Float,
+        viewH: Float
+    ) {
         val display = if (word.length > 40) word.take(40) + "..." else word
         AlertDialog.Builder(this, R.style.DarkDialogTheme)
             .setTitle("\"$display\"")
             .setItems(arrayOf("🌐 번역", "✏️ 편집", "📋 복사")) { _, which ->
                 when (which) {
                     0 -> showTranslateDialog(word)
-                    1 -> {
-                        val intent = Intent(this, PdfInlineEditorActivity::class.java).apply {
-                            putExtra(PdfInlineEditorActivity.EXTRA_PATH, file.absolutePath)
-                            putExtra(PdfInlineEditorActivity.EXTRA_PAGE, pageIndex)
-                        }
-                        inlineEditorLauncher.launch(intent)
-                    }
+                    1 -> showInlineEditor(wordQuad, page, childView, viewW, viewH)
                     2 -> {
                         val cm = getSystemService(CLIPBOARD_SERVICE)
                             as android.content.ClipboardManager
@@ -410,6 +435,128 @@ class PdfViewerActivity : AppCompatActivity() {
             }
             .setNegativeButton("취소", null)
             .show()
+    }
+
+    /**
+     * ⭐ 뷰어 위 인라인 EditText — 별도 편집기 안 감
+     */
+    /**
+     * ⭐ 뷰어 위 인라인 EditText — 확대 상태 유지
+     */
+    private fun showInlineEditor(
+        word: PdfTextPicker.Word,
+        page: PdfPageAdapter.PageData,
+        childView: android.view.View,
+        viewW: Float,
+        viewH: Float
+    ) {
+        commitInlineEdit()
+
+        // ⭐ zoom 리셋 하지 않음
+        val scale = rootLayout.currentScale
+        val tx = rootLayout.currentTranslateX
+        val ty = rootLayout.currentTranslateY
+
+        rootLayout.post {
+            val rvLeft = recyclerView.left.toFloat()
+            val rvTop = recyclerView.top.toFloat()
+            val childLeft = childView.left.toFloat()
+            val childTop = childView.top.toFloat()
+
+            // child 내부 좌표 (scale=1 기준)
+            val wordViewX = word.x / page.widthPt * viewW
+            val wordViewY = word.y / page.heightPt * viewH
+            val wordViewW = (word.width / page.widthPt * viewW).coerceAtLeast(40f)
+            val wordViewH = (word.height / page.heightPt * viewH).coerceAtLeast(14f)
+
+            // ⭐ scale + translation 적용 → 화면 절대 좌표
+            val screenX = rvLeft + tx + (childLeft + wordViewX) * scale
+            val screenY = rvTop + ty + (childTop + wordViewY) * scale
+
+            val onScreenW = (wordViewW * scale).coerceAtLeast(80f)
+            val onScreenH = (wordViewH * scale).coerceAtLeast(28f)
+            val fontPx = (onScreenH * 0.62f).coerceIn(14f, 42f)
+
+            val et = EditText(this).apply {
+                setText(word.text)
+                setSelection(word.text.length)
+                setTextColor(0xFF000000.toInt())
+                setBackgroundColor(0xFFFFFFFF.toInt())
+                setPadding(16, 6, 16, 6)
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, fontPx)
+                isSingleLine = true
+                inputType = InputType.TYPE_CLASS_TEXT
+                imeOptions = EditorInfo.IME_ACTION_DONE
+                layoutParams = FrameLayout.LayoutParams(
+                    (onScreenW + 140f).toInt(),
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+                x = screenX - 8f
+                y = screenY - 4f
+                setOnEditorActionListener { _, actionId, _ ->
+                    if (actionId == EditorInfo.IME_ACTION_DONE) {
+                        commitInlineEdit(); true
+                    } else false
+                }
+            }
+
+            rootLayout.addView(et)
+            inlineEditView = et
+            inlineEditHit = WordHit(word, page, childView, viewW, viewH)
+
+            recyclerView.isEnabled = false
+
+            et.requestFocus()
+            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
+                .showSoftInput(et, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    /**
+     * ⭐ 라우터 밖 클릭 시에도 커밋 — commitInlineEdit 강제
+     */
+    private fun forceCommitIfEditing() {
+        if (inlineEditView != null) commitInlineEdit()
+    }
+
+    private fun commitInlineEdit() {
+        val et = inlineEditView ?: return
+        val hit = inlineEditHit
+        val newText = et.text.toString()
+
+        inlineEditView = null
+        inlineEditHit = null
+        try { rootLayout.removeView(et) } catch (_: Exception) {}
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
+            .hideSoftInputFromWindow(et.windowToken, 0)
+
+        recyclerView.isEnabled = true
+
+        if (hit == null) return
+        if (newText == hit.word.text) return
+        if (newText.isBlank()) return
+
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                PdfTextEditor.replaceMultiple(
+                    context = this@PdfViewerActivity,
+                    file = file,
+                    pageIndex = hit.page.index,
+                    edits = mapOf(0 to (hit.word to newText))
+                )
+            }
+            result.fold(
+                onSuccess = {
+                    Toast.makeText(this@PdfViewerActivity,
+                        "\u2705 \uc800\uc7a5\ub428", Toast.LENGTH_SHORT).show()
+                    recreate()
+                },
+                onFailure = {
+                    Toast.makeText(this@PdfViewerActivity,
+                        "\u274c ${it.message}", Toast.LENGTH_LONG).show()
+                }
+            )
+        }
     }
 
     private fun showTranslateDialog(sourceText: String) {
@@ -527,6 +674,7 @@ class PdfViewerActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        try { commitInlineEdit() } catch (_: Exception) {}
         autoHideRunnable?.let { autoHideHandler.removeCallbacks(it) }
         try { pdfRenderer.close() } catch (_: Exception) {}
         try { pfd.close() } catch (_: Exception) {}
