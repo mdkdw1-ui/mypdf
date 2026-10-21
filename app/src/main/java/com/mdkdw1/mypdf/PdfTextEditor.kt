@@ -258,8 +258,9 @@ object PdfTextEditor {
                     for ((_, pair) in edits) {
                         val (word, newText) = pair
 
-                        // ⭐ word.y는 top-origin (PdfTextPicker) → bottom-origin 변환
-                        val baselineY = pageHeightPt - word.baselineFromTop
+                        // ⭐ baselineY: PdfBox TextPosition.y (bottom-origin) 우선
+                        val baselineY = if (word.baselinePdf > 0f) word.baselinePdf
+                                        else pageHeightPt - word.baselineFromTop
                         val coverTop = baselineY - word.height * 0.4f
 
                         // 1) 원본 텍스트 완전 덮기

@@ -35,8 +35,10 @@ object PdfTextPicker {
         val height: Float,
         val fontSize: Float,
         val fontName: String,
-        /** ⭐ baseline (top-origin, PdfBox yDirAdj 그대로) */
-        val baselineFromTop: Float = y + height * 0.88f
+        /** ⭐ baseline (top-origin, 참고용) */
+        val baselineFromTop: Float = y + height * 0.88f,
+        /** ⭐ baseline (bottom-origin, PdfBox TextPosition.y 그대로) */
+        val baselinePdf: Float = 0f
     )
 
     data class ExtractResult(
@@ -71,6 +73,7 @@ object PdfTextPicker {
                 var currentFont = ""
                 var currentFontSize = 0f
                 var currentBaselineFromTop = 0f
+                var currentBaselinePdf = 0f
 
                 val stripper = object : PDFTextStripper() {
                     override fun writeString(
@@ -85,7 +88,8 @@ object PdfTextPicker {
                                         currentText.toString(),
                                         currentX, currentY, currentWidth,
                                         currentHeight, currentFontSize, currentFont,
-                                        currentBaselineFromTop
+                                        currentBaselineFromTop,
+                                        currentBaselinePdf
                                     ))
                                     currentText = StringBuilder()
                                     currentWidth = 0f
@@ -99,6 +103,7 @@ object PdfTextPicker {
                                     currentFontSize = tp.fontSizeInPt
                                     // ⭐ yDirAdj 는 baseline (top-origin)
                                     currentBaselineFromTop = tp.yDirAdj
+                                    currentBaselinePdf = tp.y
                                 }
                                 currentText.append(ch)
                                 currentWidth += tp.widthDirAdj
@@ -116,7 +121,8 @@ object PdfTextPicker {
                         currentText.toString(),
                         currentX, currentY, currentWidth,
                         currentHeight, currentFontSize, currentFont,
-                        currentBaselineFromTop
+                        currentBaselineFromTop,
+                        currentBaselinePdf
                     ))
                 }
 
