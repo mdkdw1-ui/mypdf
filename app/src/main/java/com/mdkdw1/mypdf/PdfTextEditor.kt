@@ -131,7 +131,7 @@ object PdfTextEditor {
                             Color.red(foundColor), Color.green(foundColor), Color.blue(foundColor)
                         )
                         cs.beginText()
-                        cs.setFont(foundFont, (foundFontSize * 0.95f).coerceIn(6f, 72f))
+                        cs.setFont(foundFont, foundFontSize.coerceIn(6f, 72f))
                         cs.newLineAtOffset(foundX, foundY)     // ⭐ 원본 baseline
                         cs.showText(newText)
                         cs.endText()
@@ -259,7 +259,7 @@ object PdfTextEditor {
                         val (word, newText) = pair
 
                         // ⭐ word.y는 top-origin (PdfTextPicker) → bottom-origin 변환
-                        val baselineY = pageHeightPt - word.y - word.height * 0.88f
+                        val baselineY = pageHeightPt - word.baselineFromTop
                         val coverTop = baselineY - word.height * 0.4f
 
                         // 1) 원본 텍스트 완전 덮기
@@ -331,7 +331,7 @@ object PdfTextEditor {
                                 cs.setNonStrokingColor(0, 0, 0)
                                 cs.beginText()
                                 textBlockOpen = true
-                                cs.setFont(originalFont, (word.fontSize * 0.95f).coerceIn(6f, 72f))
+                                cs.setFont(originalFont, word.fontSize.coerceIn(6f, 72f))
                                 cs.newLineAtOffset(word.x, baselineY)
                                 cs.showText(newText.take(200))
                                 cs.endText()
