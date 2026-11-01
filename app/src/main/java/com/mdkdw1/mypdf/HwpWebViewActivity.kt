@@ -107,6 +107,22 @@ class HwpWebViewActivity : AppCompatActivity() {
   #viewer { width:100%; height:100vh; box-sizing:border-box; }
   #status { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
             color:#8B949E; font-size:14px; z-index:10; text-align:center; }
+/* 불필요한 상단 경고창 숨기기 */
+  [class*="warning"], [class*="unsupported"], [class*="banner"] {
+    display: none !important;
+  }
+
+  /* ⭐ 텍스트 중간을 가로지르는 선(페이지 구분선, 쟔상) 제거 */
+  hr, .hr, .page-break, .page-separator, .divider,
+  [class*="pageBreak"], [class*="page-break"], [class*="separator"],
+  [class*="hr-"], [class*="line-"] {
+    display: none !important;
+    border: none !important;
+    height: 0 !important;
+  }
+  
+  /* 테이뺔 테두리 중 가운데 가로선 제거 (필요시) */
+  table { border-collapse: collapse; }
 </style>
 </head>
 <body>
