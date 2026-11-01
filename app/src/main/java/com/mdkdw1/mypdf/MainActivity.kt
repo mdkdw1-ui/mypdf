@@ -121,8 +121,8 @@ fun AppNavHost() {
                 onOpenReader = { path ->
                     val ext = java.io.File(path).extension.lowercase()
                     val intent = if (ext == "hwp" || ext == "hwpx") {
-                        Intent(ctx, HwpViewerActivity::class.java).apply {
-                            putExtra(HwpViewerActivity.EXTRA_PATH, path)
+                        Intent(ctx, HwpWebViewActivity::class.java).apply {
+                            putExtra(HwpWebViewActivity.EXTRA_PATH, path)
                         }
                     } else {
                         Intent(ctx, PdfViewerActivity::class.java).apply {

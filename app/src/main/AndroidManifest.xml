@@ -132,6 +132,13 @@
             android:label="HWP ë·°ì´"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".HwpWebViewActivity"
+            android:exported="false"
+            android:label="HWP ë·°ì´ (Web)"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/Theme.Material3.DayNight.NoActionBar" />
     </application>
 
     <queries>
