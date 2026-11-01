@@ -328,6 +328,7 @@ class FilePickerActivity : AppCompatActivity() {
 
                 val (file, title, sub) = filteredItems[position]
                 val isPdf = file.isFile
+                val isHwp = isPdf && file.extension.lowercase() in listOf("hwp", "hwpx")
                 val hasPdf = !isPdf && title.startsWith("📁🔴")
 
                 // 🎨 아이콘 — 원형 그라데이션

@@ -50,10 +50,11 @@ class MainActivity : ComponentActivity() {
         }
     
         handleIncomingIntent(intent)
-}
-    override fun onNewIntent(intent: android.content.Intent?) {
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
-        if (intent != null) handleIncomingIntent(intent)
+        handleIncomingIntent(intent)
     }
 
     private fun handleIncomingIntent(intent: android.content.Intent) {
