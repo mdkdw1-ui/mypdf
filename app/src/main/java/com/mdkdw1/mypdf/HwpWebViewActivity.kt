@@ -112,6 +112,32 @@ class HwpWebViewActivity : AppCompatActivity() {
 <body>
 <div id="status">문서 로드 중...</div>
 <div id="viewer"></div>
+<script>
+  // ⭐ Android WebView 에서는 speechSynthesis 가 없어 경고가 뜼는 문제 해결
+  // 라이브러리가 호출하는 최소한의 API 만 가지고 있는 척 하는 객체를 삽입
+  if (typeof window.speechSynthesis === 'undefined') {
+    window.speechSynthesis = {
+      speak: function() {},
+      cancel: function() {},
+      pause: function() {},
+      resume: function() {},
+      getVoices: function() { return []; },
+      speaking: false,
+      pending: false,
+      paused: false,
+      onvoiceschanged: null,
+      addEventListener: function() {},
+      removeEventListener: function() {}
+    };
+    window.SpeechSynthesisUtterance = function(text) {
+      this.text = text;
+      this.lang = '';
+      this.rate = 1;
+      this.pitch = 1;
+      this.volume = 1;
+    };
+  }
+</script>
 <script src="/hwp/doc-viewer.min.js"></script>
 <script>
 (function() {
