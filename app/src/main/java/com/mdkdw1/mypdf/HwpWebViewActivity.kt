@@ -112,7 +112,7 @@ class HwpWebViewActivity : AppCompatActivity() {
     display: none !important;
   }
 
-  /* ⭐ 텍스트 중간을 가로지르는 선(페이지 구분선, 쟔상) 제거 */
+  /* ⭐ 1차: 명시적인 선 태그 제거 */
   hr, .hr, .page-break, .page-separator, .divider,
   [class*="pageBreak"], [class*="page-break"], [class*="separator"],
   [class*="hr-"], [class*="line-"] {
@@ -120,9 +120,24 @@ class HwpWebViewActivity : AppCompatActivity() {
     border: none !important;
     height: 0 !important;
   }
-  
-  /* 테이뺔 테두리 중 가운데 가로선 제거 (필요시) */
-  table { border-collapse: collapse; }
+
+  /* ⭐ 2차: 모든 요소의 상하/하단 테두리 제거 (표 내부 제외) */
+  #viewer > *:not(table):not(tr):not(td):not(th) {
+    border-top: none !important;
+    border-bottom: none !important;
+  }
+  #viewer div, #viewer p, #viewer span {
+    border-top: none !important;
+    border-bottom: none !important;
+  }
+
+  /* ⭐ 3차: 배경으로 그려진 선 제거 (상단 배경이 선으로 보이는 경우) */
+  #viewer * {
+    background-image: none !important;
+  }
+
+  /* ⭐ 4차: 테이뺔은 테두리 유지 (표는 보여야 함) */
+  table { border-collapse: collapse !important; }
 </style>
 </head>
 <body>
