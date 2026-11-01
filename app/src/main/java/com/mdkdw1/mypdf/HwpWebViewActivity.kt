@@ -183,14 +183,73 @@ class HwpWebViewActivity : AppCompatActivity() {
     var srcUrl = "${srcUrl}";
     var result = BaneungDocViewer.mount('#viewer', { src: srcUrl });
 
+    // ⭐ 렌더링 후 DOM 조작: 모든 인라인 배경색/테두리/취소선 강제 제거
+    function cleanDOM() {
+      try {
+        var container = document.getElementById('viewer');
+        if (!container) return;
+        
+        // 모든 요소 순회
+        var all = container.querySelectorAll('*');
+        all.forEach(function(el) {
+          // 1. 인라인 스타일 제거 (background, border, text-decoration 등)
+          if (el.style) {
+            el.style.backgroundColor = 'transparent';
+            el.style.backgroundImage = 'none';
+            el.style.borderTop = 'none';
+            el.style.borderBottom = 'none';
+            el.style.borderLeft = 'none';
+            el.style.borderRight = 'none';
+            el.style.textDecoration = 'none';
+            el.style.boxShadow = 'none';
+          }
+          
+          // 2. 계산된 스타일(Computed Style)에서도 강제 제거
+          var cs = window.getComputedStyle(el);
+          if (cs.textDecorationLine === 'line-through' || 
+              cs.textDecorationLine === 'underline') {
+            el.style.setProperty('text-decoration', 'none', 'important');
+          }
+          if (cs.borderBottomStyle !== 'none') {
+            el.style.setProperty('border-bottom', 'none', 'important');
+          }
+          
+          // 3. 의심되는 클래스명이나 태그 숨기기
+          var cls = (el.className || '').toString().toLowerCase();
+          if (cls.indexOf('line') >= 0 || 
+              cls.indexOf('separator') >= 0 || 
+              cls.indexOf('divider') >= 0 || 
+              cls.indexOf('border') >= 0) {
+            if (el.tagName !== 'TABLE' && el.tagName !== 'TR' && 
+                el.tagName !== 'TD' && el.tagName !== 'TH') {
+              el.style.display = 'none';
+            }
+          }
+        });
+        console.log('DOM cleanup done. Elements processed:', all.length);
+      } catch(e) {
+        console.error('cleanDOM error:', e);
+      }
+    }
+
     // mount가 Promise 반환 시
     if (result && typeof result.then === 'function') {
-      result.then(done).catch(function(e) {
+      result.then(function() {
+        done();
+        // ⭐ 렌더 완료 후 500ms 뒤에 DOM 정리 (라이브러리가 그린 후)
+        setTimeout(cleanDOM, 500);
+        // ⭐ 1초 뒤 한 번 더 (비동기 렌더링 대비)
+        setTimeout(cleanDOM, 1500);
+      }).catch(function(e) {
         status('❌ 렌더 실패: ' + (e && e.message ? e.message : e));
       });
     } else {
-      // 동기 반환 → 약간 대기 후 숨김
-      setTimeout(done, 800);
+      // 동기 반환 → 약간 대기 후 숨김 및 DOM 정리
+      setTimeout(function() {
+        done();
+        cleanDOM();
+        setTimeout(cleanDOM, 1000);
+      }, 800);
     }
   } catch (e) {
     status('❌ 예외: ' + (e && e.message ? e.message : e));
