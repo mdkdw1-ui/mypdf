@@ -58,6 +58,17 @@ class HwpWebViewActivity : AppCompatActivity() {
             settings.domStorageEnabled = true
             settings.allowFileAccess = false
             settings.allowContentAccess = false
+
+            // ⭐ 핀치 줌 활성화
+            settings.setSupportZoom(true)
+            settings.builtInZoomControls = true
+            settings.displayZoomControls = false   // 기본 버튼 숨김 (핀치만 사용)
+            settings.useWideViewPort = true
+            settings.loadWithOverviewMode = true
+            
+            // ⭐ 텍스트 확대 시 자동 조정 방지 (CSS 깔끕 방지)
+            settings.textZoom = 100
+
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(
                     view: WebView,
@@ -93,7 +104,7 @@ class HwpWebViewActivity : AppCompatActivity() {
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
 <style>
   html, body {
     margin:0; padding:0; background:#FFFFFF; color:#000000;
