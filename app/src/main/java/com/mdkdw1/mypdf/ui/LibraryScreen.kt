@@ -78,7 +78,10 @@ fun LibraryScreen(onOpenReader: (String) -> Unit) {
 
     val allFiles = remember(sortMode, refresh) {
         val dir = File(context.filesDir, "pdfs").apply { mkdirs() }
-        val list = dir.listFiles { f -> f.extension.lowercase() == "pdf" }?.toList() ?: emptyList()
+        val list = dir.listFiles { f ->
+            val ext = f.extension.lowercase()
+            ext == "pdf" || ext == "hwp" || ext == "hwpx"
+        }?.toList() ?: emptyList()
         when (sortMode) {
             0 -> list.sortedByDescending { prefs.getLastOpened(it.name) }
             1 -> list.sortedBy { it.name.lowercase() }
@@ -284,7 +287,9 @@ fun PdfIconRow(
     var showMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(file.absolutePath) {
-        thumbnail = PdfThumbnail.get(context, file, 200)
+        if (file.extension.lowercase() == "pdf") {
+            thumbnail = PdfThumbnail.get(context, file, 200)
+        }
     }
 
     Row(
@@ -311,8 +316,13 @@ fun PdfIconRow(
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
-                Icon(Icons.Filled.PictureAsPdf, null, tint = Color.White,
-                    modifier = Modifier.size(28.dp))
+                val isHwp = file.extension.lowercase() in listOf("hwp", "hwpx")
+                Icon(
+                    if (isHwp) Icons.Filled.Description else Icons.Filled.PictureAsPdf,
+                    null,
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
             }
             if (fav) {
                 Icon(Icons.Filled.Star, null, tint = Color(0xFFFFD700),
