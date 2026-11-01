@@ -110,15 +110,32 @@ class HwpWebViewActivity : AppCompatActivity() {
             
   /* ===== ⭐ 강력한 텍스트 렜이아웃 및 선 제거 ===== */
   #viewer * {
-    text-decoration: none !important;      /* 취소선 및 밑줄 무조건 제거 */
-    border-top: none !important;           /* 상단 테두리 제거 */
-    border-bottom: none !important;        /* 하단 테두리 제거 */
-    background-image: none !important;     /* 배경으로 그린 선 제거 */
-    box-shadow: none !important;           /* 그림자 효과 제거 */
-    line-height: 1.6 !important;           /* 행간 반드시 늘림 (글자 겹침 방지) */
-    letter-spacing: -0.01em !important;    /* 자간 조금 늘림 */
-    word-break: keep-all !important;       /* 단어 중간 잘림 방지 */
-    overflow: visible !important;          /* 글자 잘림 허용 */
+    text-decoration: none !important;
+    text-decoration-line: none !important;
+    text-decoration-style: none !important;
+    text-decoration-color: transparent !important;
+    border: none !important;
+    border-top: none !important;
+    border-bottom: none !important;
+    outline: none !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    color: #1A1A1A !important;             /* ⭐ 검은 글자 유지 */
+    line-height: 1.6 !important;
+    letter-spacing: -0.01em !important;
+    word-break: keep-all !important;
+    overflow: visible !important;
+  }
+  
+  /* ⭐ u, s, strike, del 태그 무효화 */
+  #viewer u, #viewer s, #viewer strike, #viewer del {
+    text-decoration: none !important;
+  }
+  
+  /* ⭐ 테이뺔 테두리는 필요한 것만 유지 */
+  #viewer table, #viewer tr, #viewer td, #viewer th {
+    border: 1px solid #CCCCCC !important;
   }
   
   /* 표는 테두리 유지 (선은 제거하지 않음) */
@@ -189,44 +206,49 @@ class HwpWebViewActivity : AppCompatActivity() {
         var container = document.getElementById('viewer');
         if (!container) return;
         
-        // 모든 요소 순회
+        // 1. 모든 요소에서 인라인 스타일 및 선 제거
         var all = container.querySelectorAll('*');
         all.forEach(function(el) {
-          // 1. 인라인 스타일 제거 (background, border, text-decoration 등)
           if (el.style) {
-            el.style.backgroundColor = 'transparent';
-            el.style.backgroundImage = 'none';
-            el.style.borderTop = 'none';
-            el.style.borderBottom = 'none';
-            el.style.borderLeft = 'none';
-            el.style.borderRight = 'none';
-            el.style.textDecoration = 'none';
-            el.style.boxShadow = 'none';
-          }
-          
-          // 2. 계산된 스타일(Computed Style)에서도 강제 제거
-          var cs = window.getComputedStyle(el);
-          if (cs.textDecorationLine === 'line-through' || 
-              cs.textDecorationLine === 'underline') {
+            el.style.removeProperty('text-decoration');
+            el.style.removeProperty('text-decoration-line');
+            el.style.removeProperty('border-bottom');
+            el.style.removeProperty('border-top');
             el.style.setProperty('text-decoration', 'none', 'important');
+            el.style.setProperty('background-image', 'none', 'important');
           }
-          if (cs.borderBottomStyle !== 'none') {
+          // 계산된 스타일에서 line-through/underline 감지되면 강제 제거
+          var cs = window.getComputedStyle(el);
+          if (cs.textDecorationLine !== 'none' || cs.textDecoration !== 'none') {
+            el.style.setProperty('text-decoration', 'none', 'important');
             el.style.setProperty('border-bottom', 'none', 'important');
           }
-          
-          // 3. 의심되는 클래스명이나 태그 숨기기
-          var cls = (el.className || '').toString().toLowerCase();
-          if (cls.indexOf('line') >= 0 || 
-              cls.indexOf('separator') >= 0 || 
-              cls.indexOf('divider') >= 0 || 
-              cls.indexOf('border') >= 0) {
-            if (el.tagName !== 'TABLE' && el.tagName !== 'TR' && 
-                el.tagName !== 'TD' && el.tagName !== 'TH') {
-              el.style.display = 'none';
+        });
+        
+        // 2. 텍스트 노드를 감싸는 부모 span/div 찾아서 선 제거
+        var textNodes = [];
+        var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+        while (walker.nextNode()) {
+          var node = walker.currentNode;
+          if (node.textContent.trim().length > 0) {
+            var parent = node.parentElement;
+            if (parent) {
+              parent.style.setProperty('text-decoration', 'none', 'important');
+              parent.style.setProperty('border-bottom', 'none', 'important');
+              parent.style.setProperty('background-image', 'none', 'important');
             }
           }
+        }
+        
+        // 3. 의심되는 클래스명 숨기기
+        var suspicious = container.querySelectorAll('[class*="line"], [class*="separator"], [class*="divider"], [class*="underline"], [class*="strike"]');
+        suspicious.forEach(function(el) {
+          if (el.tagName !== 'TABLE' && el.tagName !== 'TR' && el.tagName !== 'TD' && el.tagName !== 'TH') {
+            el.style.display = 'none';
+          }
         });
-        console.log('DOM cleanup done. Elements processed:', all.length);
+        
+        console.log('DOM cleanup v3 done. Elements:', all.length);
       } catch(e) {
         console.error('cleanDOM error:', e);
       }
