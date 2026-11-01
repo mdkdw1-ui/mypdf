@@ -41,6 +41,12 @@ class HwpWebViewActivity : AppCompatActivity() {
         val localCopy = File(cacheDir, file.name)
         try {
             file.copyTo(localCopy, overwrite = true)
+            // ⭐ doc-viewer.min.js 도 같은 경로에 복사
+            assets.open("doc-viewer.min.js").use { input ->
+                File(cacheDir, "doc-viewer.min.js").outputStream().use { out ->
+                    input.copyTo(out)
+                }
+            }
         } catch (e: Exception) {
             CrashLogger.e(this, "HwpWebView", "파일 복사 실패", e)
             finish(); return
@@ -106,7 +112,7 @@ class HwpWebViewActivity : AppCompatActivity() {
 <body>
 <div id="status">문서 로드 중...</div>
 <div id="viewer"></div>
-<script src="doc-viewer.min.js"></script>
+<script src="/hwp/doc-viewer.min.js"></script>
 <script>
 (function() {
   function status(msg) {
