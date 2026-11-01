@@ -107,37 +107,29 @@ class HwpWebViewActivity : AppCompatActivity() {
   #viewer { width:100%; height:100vh; box-sizing:border-box; }
   #status { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
             color:#8B949E; font-size:14px; z-index:10; text-align:center; }
-/* 불필요한 상단 경고창 숨기기 */
-  [class*="warning"], [class*="unsupported"], [class*="banner"] {
-    display: none !important;
-  }
-
-  /* ⭐ 1차: 명시적인 선 태그 제거 */
-  hr, .hr, .page-break, .page-separator, .divider,
-  [class*="pageBreak"], [class*="page-break"], [class*="separator"],
-  [class*="hr-"], [class*="line-"] {
-    display: none !important;
-    border: none !important;
-    height: 0 !important;
-  }
-
-  /* ⭐ 2차: 모든 요소의 상하/하단 테두리 제거 (표 내부 제외) */
-  #viewer > *:not(table):not(tr):not(td):not(th) {
-    border-top: none !important;
-    border-bottom: none !important;
-  }
-  #viewer div, #viewer p, #viewer span {
-    border-top: none !important;
-    border-bottom: none !important;
-  }
-
-  /* ⭐ 3차: 배경으로 그려진 선 제거 (상단 배경이 선으로 보이는 경우) */
+            
+  /* ===== ⭐ 강력한 텍스트 렜이아웃 및 선 제거 ===== */
   #viewer * {
-    background-image: none !important;
+    text-decoration: none !important;      /* 취소선 및 밑줄 무조건 제거 */
+    border-top: none !important;           /* 상단 테두리 제거 */
+    border-bottom: none !important;        /* 하단 테두리 제거 */
+    background-image: none !important;     /* 배경으로 그린 선 제거 */
+    box-shadow: none !important;           /* 그림자 효과 제거 */
+    line-height: 1.6 !important;           /* 행간 반드시 늘림 (글자 겹침 방지) */
+    letter-spacing: -0.01em !important;    /* 자간 조금 늘림 */
+    word-break: keep-all !important;       /* 단어 중간 잘림 방지 */
+    overflow: visible !important;          /* 글자 잘림 허용 */
   }
-
-  /* ⭐ 4차: 테이뺔은 테두리 유지 (표는 보여야 함) */
-  table { border-collapse: collapse !important; }
+  
+  /* 표는 테두리 유지 (선은 제거하지 않음) */
+  #viewer table, #viewer tr, #viewer td, #viewer th {
+    border-color: #444 !important;
+  }
+  
+  /* 강제 선 태그 숨기기 */
+  hr, .hr, [class*="line"], [class*="divider"] {
+    display: none !important;
+  }
 </style>
 </head>
 <body>
