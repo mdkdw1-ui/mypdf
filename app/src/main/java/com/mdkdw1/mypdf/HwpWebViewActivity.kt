@@ -13,11 +13,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
 import java.io.File
 
-/**
- * HWPX/HWP 뷰어 (WebView + @baneung-pack/doc-viewer)
- * - 로컬 파일은 WebViewAssetLoader로 가상 URL 제공 (서버 전송 없음)
- * - BaneungDocViewer.mount('#viewer', { src: 'https://appassets.androidplatform.net/hwp/file.hwpx' })
- */
 class HwpWebViewActivity : AppCompatActivity() {
 
     companion object {
@@ -36,12 +31,10 @@ class HwpWebViewActivity : AppCompatActivity() {
         val file = File(path)
         if (!file.exists()) { finish(); return }
 
-        // 파일을 cacheDir/hwp_viewer/ 로 복사 (assetLoader가 참조)
         val cacheDir = File(cacheDir, "hwp_viewer").apply { mkdirs() }
         val localCopy = File(cacheDir, file.name)
         try {
             file.copyTo(localCopy, overwrite = true)
-            // ⭐ doc-viewer.min.js 도 같은 경로에 복사
             assets.open("doc-viewer.min.js").use { input ->
                 File(cacheDir, "doc-viewer.min.js").outputStream().use { out ->
                     input.copyTo(out)
@@ -85,7 +78,7 @@ class HwpWebViewActivity : AppCompatActivity() {
         }
 
         val virtualUrl = "https://$ASSET_DOMAIN/hwp/${Uri.encode(file.name)}"
-        val html = buildHtml(virtualUrl, file.name)
+        val html = buildHtml(virtualUrl)
         webView.loadDataWithBaseURL(
             "https://$ASSET_DOMAIN/",
             html,
@@ -95,55 +88,29 @@ class HwpWebViewActivity : AppCompatActivity() {
         )
     }
 
-    private fun buildHtml(srcUrl: String, fileName: String): String = """
+    private fun buildHtml(srcUrl: String): String = """
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  html, body { 
-    margin:0; padding:0; 
-    background:#FFFFFF; 
-    color:#000000;
-    font-family:sans-serif; 
-    height:100%; 
-    -webkit-text-size-adjust: 100%;
+  html, body {
+    margin:0; padding:0; background:#FFFFFF; color:#000000;
+    font-family:sans-serif; height:100%; -webkit-text-size-adjust: 100%;
   }
   #viewer { width:100%; height:100vh; box-sizing:border-box; background:#FFFFFF; }
-  #status { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-            color:#666; font-size:14px; z-index:10; text-align:center; }
+  #status {
+    position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    color:#666; font-size:14px; z-index:10; text-align:center;
+  }
+  /* CSS 1차 방어: hr 태그만 명확히 숨김 */
+  hr { display: none !important; }
 </style>
 </head>
 <body>
 <div id="status">문서 로드 중...</div>
 <div id="viewer"></div>
-<script>
-  // ⭐ Android WebView 에서는 speechSynthesis 가 없어 경고가 뜼는 문제 해결
-  // 라이브러리가 호출하는 최소한의 API 만 가지고 있는 척 하는 객체를 삽입
-  if (typeof window.speechSynthesis === 'undefined') {
-    window.speechSynthesis = {
-      speak: function() {},
-      cancel: function() {},
-      pause: function() {},
-      resume: function() {},
-      getVoices: function() { return []; },
-      speaking: false,
-      pending: false,
-      paused: false,
-      onvoiceschanged: null,
-      addEventListener: function() {},
-      removeEventListener: function() {}
-    };
-    window.SpeechSynthesisUtterance = function(text) {
-      this.text = text;
-      this.lang = '';
-      this.rate = 1;
-      this.pitch = 1;
-      this.volume = 1;
-    };
-  }
-</script>
 <script src="/hwp/doc-viewer.min.js"></script>
 <script>
 (function() {
@@ -156,34 +123,97 @@ class HwpWebViewActivity : AppCompatActivity() {
     if (el) el.style.display = 'none';
   }
 
+  // \u2b50 \uc120 \uc81c\uac70 \ud568\uc218: \uac00\ub85c\uc904\uc774 \uc544\ub2c8\ub77c \uc6d0\ubcf8\uc758 \ucde8\uc18c\uc120/\ubc11\uc904\ub9cc \uc81c\uac70
+  function killStrikeLines() {
+    try {
+      var viewer = document.getElementById('viewer');
+      if (!viewer) return;
+
+      // text-decoration (line-through, underline) \uc81c\uac70
+      var all = viewer.querySelectorAll('*');
+      for (var i = 0; i < all.length; i++) {
+        var el = all[i];
+        var tag = el.tagName;
+
+        // \ud45c \ud0dc\uadf8\ub294 \uc548\uc804 \uc7a5\uc18c
+        if (tag === 'TABLE' || tag === 'TR' || tag === 'TD' || tag === 'TH' ||
+            tag === 'TBODY' || tag === 'THEAD' || tag === 'TFOOT' ||
+            tag === 'IMG' || tag === 'SVG' || tag === 'PATH') {
+          continue;
+        }
+
+        var cs = window.getComputedStyle(el);
+        // \uae00\uc790 \uc911\uac04\uc744 \uac00\ub85c\uc9c0\ub974\ub294 \uc120 \uc81c\uac70
+        if (cs.textDecorationLine && cs.textDecorationLine !== 'none') {
+          el.style.setProperty('text-decoration', 'none', 'important');
+        }
+        // \ubc11\uc904 \uc81c\uac70
+        if (cs.borderBottomStyle !== 'none' && cs.borderBottomWidth !== '0px') {
+          el.style.setProperty('border-bottom', 'none', 'important');
+        }
+        // \uc704\ucabd \ud14c\ub450\ub9ac \uc81c\uac70 (\uc120\ucc98\ub7fc \ubcf4\uc77c \uc218 \uc788\uc74c)
+        if (cs.borderTopStyle !== 'none' && cs.borderTopWidth !== '0px') {
+          el.style.setProperty('border-top', 'none', 'important');
+        }
+      }
+
+      // hr \ud0dc\uadf8 \ubb34\uc870\uac74 \uc228\uae40
+      var hrs = viewer.querySelectorAll('hr');
+      for (var j = 0; j < hrs.length; j++) {
+        hrs[j].style.display = 'none';
+      }
+    } catch(e) {
+      console.error('killStrikeLines error:', e);
+    }
+  }
+
   try {
     if (typeof BaneungDocViewer === 'undefined') {
-      status('❌ BaneungDocViewer 로드 실패');
+      status('\u274c BaneungDocViewer \ub85c\ub4dc \uc2e4\ud328');
       return;
     }
-    status('렌더링 준비 중...');
+    status('\ub80c\ub354\ub9c1 \uc900\ube44 \uc911...');
 
     var srcUrl = "${srcUrl}";
     var result = BaneungDocViewer.mount('#viewer', { src: srcUrl });
 
-    // ⭐ 렌더링 후 DOM 조작: 모든 인라인 배경색/테두리/취소선 강제 제거
-    // mount가 Promise 반환 시
     if (result && typeof result.then === 'function') {
       result.then(function() {
         done();
-        // ⭐ 렌더 완료 후 500ms 뒤에 DOM 정리 (라이브러리가 그린 후)
-        // ⭐ 1초 뒤 한 번 더 (비동기 렌더링 대비)
+
+        // \u2b50 MutationObserver: \ub77c\uc774\ube0c\ub7ec\ub9ac\uac00 \uc0c8 \uc694\uc18c\ub97c \uadf8\ub9b4 \ub54c\ub9c8\ub2e4 \uc120 \uc81c\uac70
+        try {
+          var viewer = document.getElementById('viewer');
+          if (viewer && window.MutationObserver) {
+            var obs = new MutationObserver(function(mutations) {
+              var needKill = false;
+              for (var i = 0; i < mutations.length; i++) {
+                if (mutations[i].addedNodes.length > 0) { needKill = true; break; }
+              }
+              if (needKill) setTimeout(killStrikeLines, 50);
+            });
+            obs.observe(viewer, { childList: true, subtree: true });
+          }
+        } catch(_) {}
+
+        // \ub2e8\uacc4\ubcc4 \ud074\ub9ac\ub2dd
+        setTimeout(killStrikeLines, 100);
+        setTimeout(killStrikeLines, 500);
+        setTimeout(killStrikeLines, 1500);
+        setTimeout(killStrikeLines, 3000);
       }).catch(function(e) {
-        status('❌ 렌더 실패: ' + (e && e.message ? e.message : e));
+        status('\u274c \ub80c\ub354 \uc2e4\ud328: ' + (e && e.message ? e.message : e));
       });
     } else {
-      // 동기 반환 → 약간 대기 후 숨김 및 DOM 정리
       setTimeout(function() {
         done();
+        setTimeout(killStrikeLines, 100);
+        setTimeout(killStrikeLines, 500);
+        setTimeout(killStrikeLines, 1500);
       }, 800);
     }
   } catch (e) {
-    status('❌ 예외: ' + (e && e.message ? e.message : e));
+    status('\u274c \uc608\uc678: ' + (e && e.message ? e.message : e));
   }
 })();
 </script>
