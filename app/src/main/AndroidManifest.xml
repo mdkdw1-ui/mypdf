@@ -34,6 +34,19 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="file" android:mimeType="application/pdf" />
                 <data android:scheme="content" android:mimeType="application/pdf" />
+                <data android:scheme="file" android:mimeType="application/x-hwp" />
+                <data android:scheme="content" android:mimeType="application/x-hwp" />
+                <data android:scheme="file" android:mimeType="application/haansofthwp" />
+                <data android:scheme="content" android:mimeType="application/haansofthwp" />
+                <data android:scheme="file" android:mimeType="application/vnd.hancom.hwpx" />
+                <data android:scheme="content" android:mimeType="application/vnd.hancom.hwpx" />
+                <data android:scheme="file" android:mimeType="application/haansofthwpx" />
+                <data android:scheme="content" android:mimeType="application/haansofthwpx" />
+                <!-- 파일 확장자 기반 (mimeType 불명확한 경우) -->
+                <data android:scheme="file" android:pathPattern=".*\\.hwp" />
+                <data android:scheme="file" android:pathPattern=".*\\.hwpx" />
+                <data android:scheme="content" android:pathPattern=".*\\.hwp" />
+                <data android:scheme="content" android:pathPattern=".*\\.hwpx" />
             </intent-filter>
         </activity>
 

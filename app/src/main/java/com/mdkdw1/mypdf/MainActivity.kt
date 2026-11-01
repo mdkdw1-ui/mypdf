@@ -48,6 +48,65 @@ class MainActivity : ComponentActivity() {
                 AppNavHost()
             }
         }
+    
+        handleIncomingIntent(intent)
+}
+    override fun onNewIntent(intent: android.content.Intent?) {
+        super.onNewIntent(intent)
+        if (intent != null) handleIncomingIntent(intent)
+    }
+
+    private fun handleIncomingIntent(intent: android.content.Intent) {
+        if (intent.action != android.content.Intent.ACTION_VIEW) return
+        val uri = intent.data ?: return
+
+        try {
+            val fileName = getFileNameFromUri(uri) ?: "shared"
+            val ext = fileName.substringAfterLast('.', "").lowercase()
+            if (ext != "pdf" && ext != "hwp" && ext != "hwpx") {
+                android.widget.Toast.makeText(this,
+                    "지원하지 않는 파일: .$ext",
+                    android.widget.Toast.LENGTH_LONG).show()
+                return
+            }
+
+            // 파일 복사 (content:// → filesDir/pdfs/)
+            val dir = java.io.File(filesDir, "pdfs").apply { mkdirs() }
+            val dst = java.io.File(dir, fileName)
+            contentResolver.openInputStream(uri)?.use { input ->
+                java.io.FileOutputStream(dst).use { out -> input.copyTo(out) }
+            } ?: run {
+                android.widget.Toast.makeText(this, "파일 읽기 실패", android.widget.Toast.LENGTH_LONG).show()
+                return
+            }
+
+            val target = if (ext == "hwp" || ext == "hwpx") {
+                android.content.Intent(this, HwpViewerActivity::class.java).apply {
+                    putExtra(HwpViewerActivity.EXTRA_PATH, dst.absolutePath)
+                }
+            } else {
+                android.content.Intent(this, PdfViewerActivity::class.java).apply {
+                    putExtra(PdfViewerActivity.EXTRA_PATH, dst.absolutePath)
+                }
+            }
+            startActivity(target)
+        } catch (e: Exception) {
+            com.mdkdw1.mypdf.CrashLogger.e(this, "MainActivity", "외부 인텐트 처리 실패", e)
+            android.widget.Toast.makeText(this, "파일 열기 실패: ${e.message}",
+                android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun getFileNameFromUri(uri: android.net.Uri): String? {
+        if (uri.scheme == "file") return uri.lastPathSegment
+        var name: String? = null
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (idx >= 0 && cursor.moveToFirst()) {
+                name = cursor.getString(idx)
+            }
+        }
+        return name ?: uri.lastPathSegment
     }
 }
 

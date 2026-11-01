@@ -62,9 +62,14 @@ class FilePickerActivity : AppCompatActivity() {
         return blockedNames.contains(name)
     }
 
+    private fun isDocumentFile(f: File): Boolean {
+        val ext = f.extension.lowercase()
+        return ext == "pdf" || ext == "hwp" || ext == "hwpx"
+    }
+
     private fun hasPdfDirect(dir: File): Boolean {
         val files = dir.listFiles() ?: return false
-        return files.any { it.isFile && it.extension.lowercase() == "pdf" }
+        return files.any { it.isFile && isDocumentFile(it) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -257,7 +262,7 @@ class FilePickerActivity : AppCompatActivity() {
         etSearch.setText("")
 
         val files = currentDir.listFiles()?.sortedBy { it.name.lowercase() } ?: emptyList()
-        val pdfFiles = files.filter { it.isFile && it.extension.lowercase() == "pdf" }
+        val pdfFiles = files.filter { it.isFile && isDocumentFile(it) }
         val subFolders = files.filter { it.isDirectory && !isBlocked(it.name) }
 
         allItems = mutableListOf()
@@ -349,7 +354,11 @@ class FilePickerActivity : AppCompatActivity() {
 
                 val iconText = TextView(ctx).apply {
                     layoutParams = FrameLayout.LayoutParams(120, 120)
-                    text = if (isPdf) "📄" else "📁"
+                    text = when {
+                        isHwp -> "📝"
+                        isPdf -> "📄"
+                        else -> "📁"
+                    }
                     textSize = 30f
                     gravity = Gravity.CENTER
                 }
